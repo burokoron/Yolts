@@ -10,7 +10,7 @@
 
 ## 使い方
 
-1. [Releases](https://github.com/burokoron/Yolts/releases)から任意のバージョンのYolts.zipをダウンロードする
+1. [Releases](https://github.com/burokoron/Yolts/releases)から任意のバージョンのYoltsV*.zipをダウンロードする
 2. ダウンロードしたzipファイルを展開する
 3. フォルダ内にある任意の*.batファイルを将棋所やShogiGUIで将棋エンジンとして登録する
 4. 対局する
