@@ -3,8 +3,8 @@
 """
 
 import dataclasses
-import typing
 import random
+import typing
 
 import cshogi
 
@@ -25,7 +25,7 @@ class RandomKun:
         対局するためのメイン関数
         """
 
-        while(True):
+        while True:
             # GUIからのコマンドを受け取って対応
             inputs = input().split(" ")
 
