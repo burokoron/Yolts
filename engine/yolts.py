@@ -4,6 +4,7 @@
 
 import argparse
 
+from BakuretsuSutegomaTaro import BakuretsuSutegomaTaro
 from RandomKun import RandomKun
 
 
@@ -17,8 +18,11 @@ def main(engine_name: str) -> None:
     """
 
     if engine_name == "RandomKun":
-        player = RandomKun()
-        player.start()
+        rk = RandomKun()
+        rk.start()
+    elif engine_name == "BakuretsuSutegomaTaro":
+        bst = BakuretsuSutegomaTaro()
+        bst.start()
     else:
         print(f"Not found engine = '{engine_name}'")
 
