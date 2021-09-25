@@ -115,9 +115,11 @@ class BakuretsuSutegomaTaro:
         """
 
         na = NegaAlpha()
-        value = na.search(board=self.board, depth=3., alpha=-1000000, beta=1000000)
+        value = na.search(board=self.board, depth=3.0, alpha=-1000000, beta=1000000)
 
-        info_text = f"info depth {3} seldepth {na.max_board_number - self.board.move_number} "
+        info_text = (
+            f"info depth {3} seldepth {na.max_board_number - self.board.move_number} "
+        )
         info_text += f"nodes {na.num_searched} score cp {value} pv {na.best_move_pv}"
         print(info_text)
         print(f"bestmove {na.best_move_pv}")

@@ -3,8 +3,8 @@
 """
 
 import dataclasses
-import typing
 import random
+import typing
 
 import cshogi
 
@@ -14,12 +14,15 @@ class NegaAlpha:
     """
     ネガアルファ探索
     """
+
     def __post_init__(self) -> None:
         self.num_searched = 0  # 探索局面数
         self.best_move_pv = "resign"  # 最善手PV
         self.max_board_number = 0
 
-    def search(self, board: typing.Any, depth: float, alpha: int, beta: int) -> typing.Any:
+    def search(
+        self, board: typing.Any, depth: float, alpha: int, beta: int
+    ) -> typing.Any:
         # 選択的探索深さ計測用
         if board.move_number > self.max_board_number:
             self.max_board_number = board.move_number
@@ -42,7 +45,7 @@ class NegaAlpha:
             move = cshogi.move_to_usi(move)
             board.push_usi(move)
             self.num_searched += 1
-            value = -self.search(board=board, depth=depth-1, alpha=-beta, beta=-alpha)
+            value = -self.search(board=board, depth=depth - 1, alpha=-beta, beta=-alpha)
             board.pop()
 
             if best_value < value:
@@ -50,8 +53,11 @@ class NegaAlpha:
                 if depth == 3:
                     self.best_move_pv = move
                     info_text = f"info depth {int(depth)} "
-                    info_text += f"seldepth {int(self.max_board_number - board.move_number)} "
-                    info_text += f"nodes {self.num_searched} score cp {value} pv {self.best_move_pv}"
+                    info_text += (
+                        f"seldepth {int(self.max_board_number - board.move_number)} "
+                    )
+                    info_text += f"nodes {self.num_searched} score cp {value} "
+                    info_text += f"pv {self.best_move_pv}"
                     print(info_text, flush=True)
 
         return best_value
