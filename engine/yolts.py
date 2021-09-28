@@ -20,7 +20,7 @@ def main(engine_name: str) -> None:
     if engine_name == "RandomKun":
         rk = RandomKun()
         rk.start()
-    elif engine_name == "BakuretsuSutegomaTaro":
+    elif engine_name == "BakuretsuKomasuteTaro":
         bst = BakuretsuSutegomaTaro()
         bst.start()
     else:

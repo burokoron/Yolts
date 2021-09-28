@@ -18,7 +18,7 @@ class BakuretsuSutegomaTaro:
 
     def __post_init__(self) -> None:
         self.engine_name = "爆裂駒捨太郎"
-        self.version = "Version 1.0.0"
+        self.version = "Version 1.1.0"
         self.author = "burokoron"
 
     def start(self) -> None:
@@ -114,12 +114,31 @@ class BakuretsuSutegomaTaro:
         評価値はランダムだが全探索する
         """
 
-        na = NegaAlpha()
-        value = na.search(board=self.board, depth=3.0, alpha=-1000000, beta=1000000)
+        go_info = {}
+        for i in range(0, len(inputs), 2):
+            go_info[inputs[i]] = int(inputs[i + 1])
 
-        info_text = (
-            f"info depth {3} seldepth {na.max_board_number - self.board.move_number} "
+        max_depth = 3.0
+        margin_time = 1000
+        if self.board.turn == 0:
+            max_time = go_info["btime"]
+            if "binc" in go_info:
+                max_time = go_info["binc"]
+        else:
+            max_time = go_info["wtime"]
+            if "winc" in go_info:
+                max_time = go_info["winc"]
+        if "byoyomi" in go_info:
+            max_time += go_info["byoyomi"]
+        max_time -= margin_time
+
+        na = NegaAlpha(max_depth=max_depth, max_time=max_time)
+        value = na.search(
+            board=self.board, depth=max_depth, alpha=-1000000, beta=1000000
         )
+
+        info_text = f"info depth {int(max_depth)} "
+        info_text += f"seldepth {int(na.max_board_number - self.board.move_number)} "
         info_text += f"nodes {na.num_searched} score cp {value} pv {na.best_move_pv}"
         print(info_text)
         print(f"bestmove {na.best_move_pv}")
