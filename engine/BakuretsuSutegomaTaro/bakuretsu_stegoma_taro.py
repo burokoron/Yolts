@@ -3,6 +3,7 @@
 """
 
 import dataclasses
+import pickle
 import typing
 
 import cshogi
@@ -18,8 +19,9 @@ class BakuretsuSutegomaTaro:
 
     def __post_init__(self) -> None:
         self.engine_name = "爆裂駒捨太郎"
-        self.version = "Version 1.1.0"
+        self.version = "Version 2.0.0"
         self.author = "burokoron"
+        self.eval_file_path = "BakuretsuSutegomaTaro/eval.pkl"  # 評価パラメータファイルパス
 
     def start(self) -> None:
         """
@@ -35,7 +37,7 @@ class BakuretsuSutegomaTaro:
             elif inputs[0] == "isready":  # 対局準備
                 self.isready()
             elif inputs[0] == "setoption":  # エンジンのパラメータ設定
-                self.setoption()
+                self.setoption(inputs=inputs[2:])
             elif inputs[0] == "usinewgame":  # 新規対局準備
                 self.usinewgame()
             elif inputs[0] == "position":  # 現局面の反映
@@ -56,11 +58,12 @@ class BakuretsuSutegomaTaro:
 
     def usi(self) -> None:
         """
-        エンジン名(バージョン番号付き)を返答
+        エンジン名(バージョン番号付き)とオプションを返答
         """
 
         print(f"id name {self.engine_name} {self.version}")
         print(f"id author {self.author}")
+        print(f"option name EvalFile type string default {self.eval_file_path}")
         print("usiok")
 
     def isready(self) -> None:
@@ -68,16 +71,20 @@ class BakuretsuSutegomaTaro:
         対局の準備をする
         """
 
-        # 特に準備はなし
+        # 評価パラメータの読み込み
+        self.pieces_dict, self.pieces_in_hand_dict = pickle.load(
+            open(self.eval_file_path, "rb")
+        )
         # 準備OKと返答
         print("readyok")
 
-    def setoption(self) -> None:
+    def setoption(self, inputs: typing.List[str]) -> None:
         """
         エンジンのパラメータを設定する
         """
 
-        pass
+        if inputs[0] == "EvalFile":  # 評価パラメータのファイルパス
+            self.eval_file_path = inputs[2]
 
     def usinewgame(self) -> None:
         """
@@ -118,7 +125,7 @@ class BakuretsuSutegomaTaro:
         for i in range(0, len(inputs), 2):
             go_info[inputs[i]] = int(inputs[i + 1])
 
-        max_depth = 3.0
+        max_depth = 2.0
         margin_time = 1000
         if self.board.turn == 0:
             max_time = go_info["btime"]
@@ -132,7 +139,12 @@ class BakuretsuSutegomaTaro:
             max_time += go_info["byoyomi"]
         max_time -= margin_time
 
-        na = NegaAlpha(max_depth=max_depth, max_time=max_time)
+        na = NegaAlpha(
+            max_depth=max_depth,
+            max_time=max_time,
+            pieces_in_hand_dict=self.pieces_in_hand_dict,
+            pieces_dict=self.pieces_dict,
+        )
         value = na.search(
             board=self.board, depth=max_depth, alpha=-1000000, beta=1000000
         )

@@ -3,7 +3,6 @@
 """
 
 import dataclasses
-import random
 import time
 import typing
 
@@ -18,6 +17,8 @@ class NegaAlpha:
 
     max_depth: float  # 探索深さ
     max_time: float  # 最大思考時間(マージンなし)
+    pieces_in_hand_dict: typing.Dict[int, typing.Dict[int, int]]  # 評価パラメータ(持ち駒)
+    pieces_dict: typing.Dict[int, typing.Dict[int, int]]  # 評価パラメータ(盤面)
 
     def __post_init__(self) -> None:
         self.num_searched = 0  # 探索局面数
@@ -36,17 +37,32 @@ class NegaAlpha:
         if board.is_game_over():
             return -30000 + board.move_number
 
+        # 同一局面なら
+        if board.is_draw() and self.best_move_pv != "resign":
+            return 0
+
         # 探索深さ制限なら
         if depth <= 0:
-            return random.randint(-500, 500)
+            value = 0
+            bp, bw = board.pieces_in_hand
+            ap = bp + bw
+            for i, piece in enumerate(ap):
+                value += self.pieces_in_hand_dict[i][piece]
+            pieces = board.pieces
+            for i, piece in enumerate(pieces):
+                value += self.pieces_dict[i][piece]
+            if board.turn == 0:
+                return value
+            else:
+                return -value
 
         # 時間制限なら
         if time.perf_counter() * 1000 - self.start_time >= self.max_time:
-            return -10000
+            return alpha
 
         # 王手ならちょっと延長
         if board.is_check():
-            depth += 0.5
+            depth += 0.0
 
         # 合法手展開
         best_value = alpha
@@ -62,21 +78,23 @@ class NegaAlpha:
             if best_value < value:
                 best_value = value
                 if depth >= self.max_depth:
-                    self.best_move_pv = move
                     elapsed_time = int(time.perf_counter() * 1000 - self.start_time)
+                    if elapsed_time < self.max_time:
+                        self.best_move_pv = move
 
-                    info_text = f"info depth {int(self.max_depth)} "
-                    info_text += (
-                        f"seldepth {int(self.max_board_number - board.move_number)} "
-                    )
-                    info_text += f"time {elapsed_time} "
-                    info_text += f"nodes {self.num_searched} score cp {value} "
-                    info_text += f"pv {self.best_move_pv} "
-                    if elapsed_time != 0:
+                        info_text = f"info depth {int(self.max_depth)} "
+                        info_text += "seldepth "
                         info_text += (
-                            f"nps {int(self.num_searched / (elapsed_time / 1000))}"
+                            f"{int(self.max_board_number - board.move_number)} "
                         )
-                    print(info_text, flush=True)
+                        info_text += f"time {elapsed_time} "
+                        info_text += f"nodes {self.num_searched} score cp {value} "
+                        info_text += f"pv {self.best_move_pv} "
+                        if elapsed_time != 0:
+                            info_text += (
+                                f"nps {int(self.num_searched / (elapsed_time / 1000))}"
+                            )
+                        print(info_text, flush=True)
 
             if best_value >= beta:
                 break
