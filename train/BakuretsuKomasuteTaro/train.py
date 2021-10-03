@@ -25,14 +25,33 @@ def main(path: str) -> None:
             turn_weight[board.turn] += 1
 
     turn_weight /= np.mean(turn_weight)
-    turn_weight = 1. / turn_weight
+    turn_weight = 1.0 / turn_weight
 
     # 1駒関係において情報量の多いパターンは価値があるとした評価パラメータの計算
     # 持ち駒評価パラメータ計算用
-    pieces_in_hand_dict: typing.Dict[int, typing.Dict[int, typing.Union[int, float]]] = {
+    pieces_in_hand_dict: typing.Dict[
+        int, typing.Dict[int, typing.Union[int, float]]
+    ] = {
         0: {
-            0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0,
-            10: 0, 11: 0, 12: 0, 13: 0, 14: 0, 15: 0, 16: 0, 17: 0, 18: 0
+            0: 0,
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+            5: 0,
+            6: 0,
+            7: 0,
+            8: 0,
+            9: 0,
+            10: 0,
+            11: 0,
+            12: 0,
+            13: 0,
+            14: 0,
+            15: 0,
+            16: 0,
+            17: 0,
+            18: 0,
         },
         1: {0: 0, 1: 0, 2: 0, 3: 0, 4: 0},
         2: {0: 0, 1: 0, 2: 0, 3: 0, 4: 0},
@@ -41,8 +60,25 @@ def main(path: str) -> None:
         5: {0: 0, 1: 0, 2: 0},
         6: {0: 0, 1: 0, 2: 0},
         7: {
-            0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0,
-            10: 0, 11: 0, 12: 0, 13: 0, 14: 0, 15: 0, 16: 0, 17: 0, 18: 0
+            0: 0,
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+            5: 0,
+            6: 0,
+            7: 0,
+            8: 0,
+            9: 0,
+            10: 0,
+            11: 0,
+            12: 0,
+            13: 0,
+            14: 0,
+            15: 0,
+            16: 0,
+            17: 0,
+            18: 0,
         },
         8: {0: 0, 1: 0, 2: 0, 3: 0, 4: 0},
         9: {0: 0, 1: 0, 2: 0, 3: 0, 4: 0},
@@ -51,10 +87,29 @@ def main(path: str) -> None:
         12: {0: 0, 1: 0, 2: 0},
         13: {0: 0, 1: 0, 2: 0},
     }
-    pieces_in_hand_total_dict: typing.Dict[int, typing.Dict[int, typing.Union[int, float]]] = {
+    pieces_in_hand_total_dict: typing.Dict[
+        int, typing.Dict[int, typing.Union[int, float]]
+    ] = {
         0: {
-            0: 1., 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1,
-            10: 1, 11: 1, 12: 1, 13: 1, 14: 1, 15: 1, 16: 1, 17: 1, 18: 1
+            0: 1.0,
+            1: 1,
+            2: 1,
+            3: 1,
+            4: 1,
+            5: 1,
+            6: 1,
+            7: 1,
+            8: 1,
+            9: 1,
+            10: 1,
+            11: 1,
+            12: 1,
+            13: 1,
+            14: 1,
+            15: 1,
+            16: 1,
+            17: 1,
+            18: 1,
         },
         1: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1},
         2: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1},
@@ -63,8 +118,25 @@ def main(path: str) -> None:
         5: {0: 1, 1: 1, 2: 1},
         6: {0: 1, 1: 1, 2: 1},
         7: {
-            0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1,
-            10: 1, 11: 1, 12: 1, 13: 1, 14: 1, 15: 1, 16: 1, 17: 1, 18: 1
+            0: 1,
+            1: 1,
+            2: 1,
+            3: 1,
+            4: 1,
+            5: 1,
+            6: 1,
+            7: 1,
+            8: 1,
+            9: 1,
+            10: 1,
+            11: 1,
+            12: 1,
+            13: 1,
+            14: 1,
+            15: 1,
+            16: 1,
+            17: 1,
+            18: 1,
         },
         8: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1},
         9: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1},
@@ -141,19 +213,29 @@ def main(path: str) -> None:
         for j in pieces_in_hand_dict[i].keys():
             if pieces_in_hand_dict[i][j] != 0:
                 if pieces_in_hand_dict[i][j] < 0:
-                    pieces_in_hand_dict[i][j] = -int(pieces_in_hand_total_dict[i][j] * 100)
+                    pieces_in_hand_dict[i][j] = -int(
+                        pieces_in_hand_total_dict[i][j] * 100
+                    )
                 else:
-                    pieces_in_hand_dict[i][j] = int(pieces_in_hand_total_dict[i][j] * 100)
+                    pieces_in_hand_dict[i][j] = int(
+                        pieces_in_hand_total_dict[i][j] * 100
+                    )
     for i in pieces_dict.keys():
         for j in pieces_dict[i].keys():
             if pieces_dict[i][j] != 0:
                 if pieces_dict[i][j] < 0:
                     pieces_dict[i][j] = -int(
-                        pieces_total_dict[i][j] * 100 * pieces_in_hand_features / pieces_features
+                        pieces_total_dict[i][j]
+                        * 100
+                        * pieces_in_hand_features
+                        / pieces_features
                     )
                 else:
                     pieces_dict[i][j] = int(
-                        pieces_total_dict[i][j] * 100 * pieces_in_hand_features / pieces_features
+                        pieces_total_dict[i][j]
+                        * 100
+                        * pieces_in_hand_features
+                        / pieces_features
                     )
 
     # 評価パラメータを保存
