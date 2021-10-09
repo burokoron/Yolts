@@ -4,11 +4,12 @@
 
 import dataclasses
 import pickle
+import time
 import typing
 
 import cshogi
 
-from .search import NegaAlpha
+from .search import IterativeDeepeningSearch
 
 
 @dataclasses.dataclass
@@ -19,7 +20,7 @@ class BakuretsuSutegomaTaro:
 
     def __post_init__(self) -> None:
         self.engine_name = "爆裂駒捨太郎"
-        self.version = "Version 2.0.0"
+        self.version = "Version 2.1.0"
         self.author = "burokoron"
         self.eval_file_path = "BakuretsuSutegomaTaro/eval.pkl"  # 評価パラメータファイルパス
 
@@ -118,14 +119,14 @@ class BakuretsuSutegomaTaro:
 
     def go(self, inputs: typing.List[str]) -> None:
         """
-        評価値はランダムだが全探索する
+        思考し、最善手を返す
         """
 
         go_info = {}
         for i in range(0, len(inputs), 2):
             go_info[inputs[i]] = int(inputs[i + 1])
 
-        max_depth = 2.0
+        max_depth = 3.0
         margin_time = 1000
         if self.board.turn == 0:
             max_time = go_info["btime"]
@@ -139,21 +140,16 @@ class BakuretsuSutegomaTaro:
             max_time += go_info["byoyomi"]
         max_time -= margin_time
 
-        na = NegaAlpha(
+        # 反復深化法
+        ids = IterativeDeepeningSearch(
             max_depth=max_depth,
+            start_time=time.perf_counter() * 1000,
             max_time=max_time,
             pieces_in_hand_dict=self.pieces_in_hand_dict,
             pieces_dict=self.pieces_dict,
         )
-        value = na.search(
-            board=self.board, depth=max_depth, alpha=-1000000, beta=1000000
-        )
-
-        info_text = f"info depth {int(max_depth)} "
-        info_text += f"seldepth {int(na.max_board_number - self.board.move_number)} "
-        info_text += f"nodes {na.num_searched} score cp {value} pv {na.best_move_pv}"
-        print(info_text)
-        print(f"bestmove {na.best_move_pv}")
+        best_move = ids.search(board=self.board)
+        print(f"bestmove {best_move}")
 
     def stop(self) -> None:
         """
