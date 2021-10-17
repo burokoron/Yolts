@@ -3,6 +3,7 @@
 """
 
 import dataclasses
+import operator
 import time
 import typing
 
@@ -27,6 +28,8 @@ class NegaAlpha:
             評価パラメータ(盤面)
         move_ordering_dict: typing.Dict[str, typing.Dict[str, int]]
             ムーブオーダリング辞書
+        any_to_ordering_dict: typing.Dict[int, typing.Dict[str, float]]
+            ムーブオーダリング辞書(着手位置)
         num_searched: int = 0
             探索局面数
         best_move_pv: str = "resign"
@@ -40,7 +43,8 @@ class NegaAlpha:
     max_time: float  # 最大思考時間(マージンなし)
     pieces_in_hand_dict: typing.Dict[int, typing.Dict[int, int]]  # 評価パラメータ(持ち駒)
     pieces_dict: typing.Dict[int, typing.Dict[int, int]]  # 評価パラメータ(盤面)
-    move_ordering_dict: typing.Dict[str, typing.Dict[str, int]]  # ムーブオーダリング辞書
+    move_ordering_dict: typing.Dict[str, typing.Dict[str, int]]  # ムーブオーダリング辞書(指し手)
+    any_to_ordering_dict: typing.Dict[int, typing.Dict[str, float]]  # ムーブオーダリング辞書(着手位置)
     num_searched: int = 0  # 探索局面数
     best_move_pv: str = "resign"  # 最善手PV
     max_board_number: int = 0  # 最大手数
@@ -116,6 +120,7 @@ class NegaAlpha:
         best_value = alpha
         sfen = board.sfen()
         move_list = []
+        # 現局面における合法手の評価値が高かった順に並べる
         if sfen in self.move_ordering_dict:
             sorted_move_list = sorted(
                 self.move_ordering_dict[sfen].items(), key=lambda x: x[1], reverse=True
@@ -123,7 +128,14 @@ class NegaAlpha:
             move_list = [move[0] for move in sorted_move_list]
         else:
             self.move_ordering_dict[sfen] = {}
+        # 同一深度での着手位置で評価値の高かった順に並べる
         all_move_list = [cshogi.move_to_usi(move) for move in board.legal_moves]
+        all_move_list = [
+            [move, self.any_to_ordering_dict[board.move_number][move[2:4]]]
+            for move in all_move_list
+        ]
+        all_move_list = sorted(all_move_list, key=operator.itemgetter(1), reverse=True)
+        all_move_list = [move[0] for move in all_move_list]
         move_list += [move for move in all_move_list if move not in move_list]
 
         for move in move_list:
@@ -135,10 +147,16 @@ class NegaAlpha:
             board.pop()
 
             # ムーブオーダリング登録
-            self.move_ordering_dict[sfen][move] = value
+            self.any_to_ordering_dict[board.move_number][move[2:4]] *= 0.9
+            self.any_to_ordering_dict[board.move_number][move[2:4]] += value * 0.1
 
+            # 評価値更新なら
             if best_value < value:
+                # ムーブオーダリング登録
+                self.move_ordering_dict[sfen][move] = value
                 best_value = value
+
+                # 探索開始局面ならログ更新&最善手更新
                 if depth >= self.max_depth:
                     elapsed_time = int(time.perf_counter() * 1000 - self.start_time)
                     if elapsed_time < self.max_time:
@@ -158,6 +176,7 @@ class NegaAlpha:
                             )
                         print(info_text, flush=True)
 
+            # ベータカット
             if best_value >= beta:
                 break
 
@@ -210,16 +229,22 @@ class IterativeDeepeningSearch:
             pieces_in_hand_dict=self.pieces_in_hand_dict,
             pieces_dict=self.pieces_dict,
             move_ordering_dict={},
+            any_to_ordering_dict={},
         )
 
         # 反復深化探索
+        value = 0
         for depth in range(1, int(self.max_depth) + 1):
             na.max_depth = depth
             na.best_move_pv = "resign"
+            na.any_to_ordering_dict[board.move_number + depth - 1] = {}
+            for i in "123456789":
+                for j in "abcdefghi":
+                    na.any_to_ordering_dict[board.move_number + depth - 1][i + j] = 0
             value = na.search(board=board, depth=depth, alpha=-1000000, beta=1000000)
 
             # 時間切れでないなら更新
-            if value != abs(1000000):
+            if abs(value) != 1000000:
                 elapsed_time = int(time.perf_counter() * 1000 - self.start_time)
                 info_text = f"info depth {int(depth)} "
                 info_text += f"seldepth {int(na.max_board_number - board.move_number)} "
@@ -235,6 +260,11 @@ class IterativeDeepeningSearch:
                 print(info_text)
                 break
 
+            # 次深度が時間内に終わりそうにないなら
+            elapsed_time = int(time.perf_counter() * 1000 - self.start_time)
+            if self.max_time < elapsed_time * 7:
+                break
+
         return self.best_move_pv
 
 
@@ -245,7 +275,7 @@ def main() -> None:
 
     board = cshogi.Board()
     ids = IterativeDeepeningSearch(
-        max_depth=6,
+        max_depth=7,
         start_time=time.perf_counter() * 1000,
         max_time=1000000000000,
         pieces_in_hand_dict=pieces_in_hand_dict,
