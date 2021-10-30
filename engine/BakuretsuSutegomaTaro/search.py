@@ -101,7 +101,7 @@ class NegaAlpha:
             return -30000 + board.move_number
 
         # 同一局面なら
-        if board.is_draw() and self.best_move_pv != "resign":
+        if board.is_draw() == 1 and self.max_depth > depth:
             return 0
 
         # 探索深さ制限なら
@@ -113,7 +113,7 @@ class NegaAlpha:
             return alpha
 
         # 王手ならちょっと延長
-        if board.is_check():
+        if board.is_check() and self.max_depth > depth:
             depth += 0.0
 
         # 合法手展開
