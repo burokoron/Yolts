@@ -20,7 +20,7 @@ class BakuretsuSutegomaTaro:
 
     def __post_init__(self) -> None:
         self.engine_name = "爆裂駒捨太郎"
-        self.version = "Version 2.2.0"
+        self.version = "Version 2.2.1"
         self.author = "burokoron"
         self.eval_file_path = "BakuretsuSutegomaTaro/eval.pkl"  # 評価パラメータファイルパス
 
@@ -126,19 +126,29 @@ class BakuretsuSutegomaTaro:
         for i in range(0, len(inputs), 2):
             go_info[inputs[i]] = int(inputs[i + 1])
 
-        max_depth = 4.0
+        max_depth = 10.0
         margin_time = 1000
+        min_time = 0
         if self.board.turn == 0:
             max_time = go_info["btime"]
             if "binc" in go_info:
                 max_time += go_info["binc"]
+                min_time = go_info["binc"]
         else:
             max_time = go_info["wtime"]
             if "winc" in go_info:
                 max_time += go_info["winc"]
+                min_time = go_info["winc"]
         if "byoyomi" in go_info:
             max_time += go_info["byoyomi"]
+            min_time = go_info["byoyomi"]
         max_time -= margin_time
+        min_time -= margin_time
+        # 120手で終局想定で時間制御
+        remain_move_number = (120 - self.board.move_number) // 4
+        if remain_move_number <= 0:
+            remain_move_number = 1
+        max_time = max(max_time // remain_move_number, min_time)
 
         # 反復深化法
         ids = IterativeDeepeningSearch(
