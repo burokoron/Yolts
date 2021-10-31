@@ -30,6 +30,8 @@ class NegaAlpha:
             ムーブオーダリング辞書
         any_to_ordering_dict: typing.Dict[int, typing.Dict[str, float]]
             ムーブオーダリング辞書(着手位置)
+        hash_table_dict: typing.Dict[str, typing.Dict[str, typing.Union[int, str]]]
+            置換表
         num_searched: int = 0
             探索局面数
         best_move_pv: str = "resign"
@@ -45,6 +47,7 @@ class NegaAlpha:
     pieces_dict: typing.Dict[int, typing.Dict[int, int]]  # 評価パラメータ(盤面)
     move_ordering_dict: typing.Dict[str, typing.Dict[str, int]]  # ムーブオーダリング辞書(指し手)
     any_to_ordering_dict: typing.Dict[int, typing.Dict[str, float]]  # ムーブオーダリング辞書(着手位置)
+    hash_table_dict: typing.Dict[str, typing.Dict[str, typing.Any]]  # 置換表
     num_searched: int = 0  # 探索局面数
     best_move_pv: str = "resign"  # 最善手PV
     max_board_number: int = 0  # 最大手数
@@ -92,6 +95,29 @@ class NegaAlpha:
                 ベスト評価値
         """
 
+        # 置換表
+        sfen = " ".join(board.sfen().split(" ")[:-1])
+        move_list = []
+        if (
+            sfen in self.hash_table_dict
+            and depth <= self.hash_table_dict[sfen]["depth"]
+        ):
+            lower = self.hash_table_dict[sfen]["lower"]
+            upper = self.hash_table_dict[sfen]["upper"]
+            if lower >= beta:
+                return lower
+            if upper <= alpha or upper == lower:
+                return upper
+            alpha = max(alpha, lower)
+            beta = min(beta, upper)
+            if self.hash_table_dict[sfen]["move"] is not None:
+                move_list.append(self.hash_table_dict[sfen]["move"])
+        else:
+            self.hash_table_dict[sfen] = {}
+            self.hash_table_dict[sfen]["depth"] = -1
+            self.hash_table_dict[sfen]["lower"] = -1000000
+            self.hash_table_dict[sfen]["upper"] = 1000000
+
         # 選択的探索深さ計測用
         if board.move_number > self.max_board_number:
             self.max_board_number = board.move_number
@@ -112,20 +138,27 @@ class NegaAlpha:
         if time.perf_counter() * 1000 - self.start_time >= self.max_time:
             return alpha
 
+        """
+        # futility pruning
+        value = self.evaluate(board=board)
+        if value <= alpha - 450 * int(depth) ** 0.5:
+            return value
+        """
+
+        """
         # 王手ならちょっと延長
         if board.is_check() and self.max_depth > depth:
             depth += 0.0
+        """
 
         # 合法手展開
         best_value = alpha
-        sfen = board.sfen()
-        move_list = []
         # 現局面における合法手の評価値が高かった順に並べる
         if sfen in self.move_ordering_dict:
             sorted_move_list = sorted(
                 self.move_ordering_dict[sfen].items(), key=lambda x: x[1], reverse=True
             )
-            move_list = [move[0] for move in sorted_move_list]
+            move_list += [move[0] for move in sorted_move_list if move not in move_list]
         else:
             self.move_ordering_dict[sfen] = {}
         # 同一深度での着手位置で評価値の高かった順に並べる
@@ -138,6 +171,7 @@ class NegaAlpha:
         all_move_list = [move[0] for move in all_move_list]
         move_list += [move for move in all_move_list if move not in move_list]
 
+        best_move = None
         for move in move_list:
             board.push_usi(move)
             self.num_searched += 1
@@ -155,6 +189,7 @@ class NegaAlpha:
                 # ムーブオーダリング登録
                 self.move_ordering_dict[sfen][move] = value
                 best_value = value
+                best_move = move
 
                 # 探索開始局面ならログ更新&最善手更新
                 if depth >= self.max_depth:
@@ -179,6 +214,18 @@ class NegaAlpha:
             # ベータカット
             if best_value >= beta:
                 break
+
+        # 置換表へ登録
+        if depth > self.hash_table_dict[sfen]["depth"]:
+            if best_value <= alpha:
+                self.hash_table_dict[sfen]["upper"] = best_value
+            elif best_value >= beta:
+                self.hash_table_dict[sfen]["lower"] = best_value
+            else:
+                self.hash_table_dict[sfen]["upper"] = best_value
+                self.hash_table_dict[sfen]["lower"] = best_value
+            self.hash_table_dict[sfen]["depth"] = int(depth)
+            self.hash_table_dict[sfen]["move"] = best_move
 
         return best_value
 
@@ -230,6 +277,7 @@ class IterativeDeepeningSearch:
             pieces_dict=self.pieces_dict,
             move_ordering_dict={},
             any_to_ordering_dict={},
+            hash_table_dict={},
         )
 
         # 反復深化探索
@@ -262,7 +310,7 @@ class IterativeDeepeningSearch:
 
             # 次深度が時間内に終わりそうにないなら
             elapsed_time = int(time.perf_counter() * 1000 - self.start_time)
-            if self.max_time < elapsed_time * 7:
+            if self.max_time < elapsed_time * 5:
                 break
 
         return self.best_move_pv
