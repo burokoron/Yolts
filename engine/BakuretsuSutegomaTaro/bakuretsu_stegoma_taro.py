@@ -20,7 +20,7 @@ class BakuretsuSutegomaTaro:
 
     def __post_init__(self) -> None:
         self.engine_name = "爆裂駒捨太郎"
-        self.version = "Version 2.2.1"
+        self.version = "Version 2.3.0"
         self.author = "burokoron"
         self.eval_file_path = "BakuretsuSutegomaTaro/eval.pkl"  # 評価パラメータファイルパス
 
