@@ -30,7 +30,7 @@ def main(engine_name: str) -> None:
 if __name__ == "__main__":
     """
     Args:
-        2コマンド目：str
+        2コマンド目:str
             使用するエンジン名
     """
 

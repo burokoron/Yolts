@@ -89,7 +89,7 @@ class NegaAlpha:
             alpha: int
                 アルファ値
             beta: int
-            　　ベータ値
+                ベータ値
 
         Returns:
             best_value: typing.Any
