@@ -1,6 +1,8 @@
-use shogi::{Move, PieceType, Position, Square};
-use shogi::piece::Piece;
+use std::time::Instant;
+use shogi::{Move, Position};
 use shogi::bitboard::Factory as BBFactory;
+
+mod search;
 
 struct BakuretsuKomasuteTaroR {
     engine_name: String,
@@ -87,45 +89,20 @@ impl BakuretsuKomasuteTaroR {
         思考し、最善手を返す
         */
 
-        let mut moves: Vec<Move> = Vec::new();
-        for sq in Square::iter() {
-            let pc = pos.piece_at(sq);
-            if let Some(ref pc) = *pc {
-                if pos.side_to_move() == pc.color {
-                    let mut bb = pos.move_candidates(sq, *pc);
-                    while bb.is_any() {
-                        let to = bb.pop();
-                        let m = Move::Normal { from: sq, to: to, promote: false };
-                        if pos.make_move(m).is_ok() {
-                            moves.push(m);
-                            pos.unmake_move().unwrap();
-                        }
-                        let m = Move::Normal { from: sq, to: to, promote: true };
-                        if pos.make_move(m).is_ok() {
-                            moves.push(m);
-                            pos.unmake_move().unwrap();
-                        }
-                    }
-                }
-            } else {
-                for piece_type in PieceType::iter() {
-                    let color = pos.side_to_move();
-                    if pos.hand(Piece { piece_type, color }) > 0 {
-                        let m = Move::Drop { to: sq, piece_type: piece_type };
-                        if pos.make_move(m).is_ok() {
-                            moves.push(m);
-                            pos.unmake_move().unwrap();
-                        }
-                    }
-                }
-            }
-        }
+        let mut nega = search::NegaAlpha {
+            num_searched: 0,
+            max_depth: 3.,
+            best_move_pv: "resign".to_string(),
+        };
 
-        if moves.len() != 0 {
-            return moves[0].to_string();
-        } else {
-            return "resign".to_string();
-        }
+        let start = Instant::now();
+        let value = search::NegaAlpha::search(&mut nega, pos, 0.);
+        let end = start.elapsed();
+        let elapsed_time = end.as_secs() as f64 + end.subsec_nanos() as f64 / 1_000_000_000.;
+        let nps = nega.num_searched as f64 / elapsed_time;
+        println!("info depth {} time {} nodes {} score cp {} nps {}", nega.max_depth, elapsed_time, nega.num_searched, value, nps as u64);
+
+        return nega.best_move_pv;
     }
 
     fn stop() {
@@ -166,7 +143,7 @@ fn main() {
     // 初期化
     let engine = &mut BakuretsuKomasuteTaroR {
         engine_name: "爆裂駒捨太郎R".to_string(),
-        version: "Version 0.0.1".to_string(),
+        version: "Version 0.1.0".to_string(),
         author: "burokoron".to_string(),
         eval_file_path: "BakuretsuKomasuteTaroR/eval.pkl".to_string(),
     };
