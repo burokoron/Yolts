@@ -49,7 +49,7 @@ if __name__ == "__main__":
                 "GSE 0.1.6": 0.014,
                 "LesserKai": 0.,
             },
-            "rating": 0,
+            "rating": 112,
         },
         "十六式いろは SDT4": {
             "opponent": {},
@@ -62,7 +62,7 @@ if __name__ == "__main__":
                 "GSE 0.1.6": 0.008,
                 "LesserKai": 0.001,
             },
-            "rating": 0,
+            "rating": 308,
         },
         "爆裂駒捨太郎 V 1.1.0": {
             "opponent": {
@@ -73,7 +73,7 @@ if __name__ == "__main__":
                 "LesserKai": 0.,
                 "Bonanza 6.0 D1": 0,
             },
-            "rating": 0,
+            "rating": 425,
         },
         "GSE 0.1.6": {
             "opponent": {},
@@ -89,7 +89,7 @@ if __name__ == "__main__":
                 "LesserKai": 0.004,
                 "Bonanza 6.0 D1": 0.003,
             },
-            "rating": 0,
+            "rating": 504,
         },
         "爆裂駒捨太郎 V 2.1.0": {
             "opponent": {
@@ -103,7 +103,7 @@ if __name__ == "__main__":
                 "Bonanza 6.0 D1": 0.004,
                 "Bonanza 6.0 D2": 0.0,
             },
-            "rating": 0,
+            "rating": 584,
         },
         "爆裂駒捨太郎 V 2.2.0": {
             "opponent": {
@@ -118,7 +118,7 @@ if __name__ == "__main__":
                 "Bonanza 6.0 D1": 0.011,
                 "Bonanza 6.0 D2": 0.0,
             },
-            "rating": 0,
+            "rating": 639,
         },
         "爆裂駒捨太郎 V 2.3.0": {
             "opponent": {
@@ -134,7 +134,7 @@ if __name__ == "__main__":
                 "Bonanza 6.0 D1": 0.012,
                 "Bonanza 6.0 D2": 0.002,
             },
-            "rating": 0,
+            "rating": 747,
         },
         "LesserKai": {
             "opponent": {},

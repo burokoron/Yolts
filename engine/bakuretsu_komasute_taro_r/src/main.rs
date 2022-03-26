@@ -6,7 +6,6 @@ mod search;
 
 struct BakuretsuKomasuteTaroR {
     engine_name: String,
-    version: String,
     author: String,
     eval_file_path: String,
 }
@@ -21,7 +20,7 @@ impl BakuretsuKomasuteTaroR {
                 エンジン実行中に一時保存するデータ群
         */
 
-        println!("id name {} {}", v.engine_name, v.version);
+        println!("id name {} version {}", v.engine_name, env!("CARGO_PKG_VERSION"));
         println!("id author {}", v.author);
         println!("option name EvalFile type string default {}", v.eval_file_path);
         println!("usiok");
@@ -96,7 +95,7 @@ impl BakuretsuKomasuteTaroR {
         };
 
         let start = Instant::now();
-        let value = search::NegaAlpha::search(&mut nega, pos, 0.);
+        let value = search::NegaAlpha::search(&mut nega, pos, 0., -30000, 30000);
         let end = start.elapsed();
         let elapsed_time = end.as_secs() as f64 + end.subsec_nanos() as f64 / 1_000_000_000.;
         let nps = nega.num_searched as f64 / elapsed_time;
@@ -143,9 +142,8 @@ fn main() {
     // 初期化
     let engine = &mut BakuretsuKomasuteTaroR {
         engine_name: "爆裂駒捨太郎R".to_string(),
-        version: "Version 0.1.0".to_string(),
         author: "burokoron".to_string(),
-        eval_file_path: "BakuretsuKomasuteTaroR/eval.pkl".to_string(),
+        eval_file_path: "eval.pkl".to_string(),
     };
     BBFactory::init();
     let mut pos = Position::new();

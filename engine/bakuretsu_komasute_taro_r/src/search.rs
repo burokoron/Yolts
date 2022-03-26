@@ -8,18 +8,41 @@ pub struct NegaAlpha {
 }
 
 impl NegaAlpha {
-    pub fn search(v: &mut NegaAlpha, pos: &mut Position, depth: f32) -> i32 {
+    pub fn search(v: &mut NegaAlpha, pos: &mut Position, depth: f32, alpha: i32, beta: i32) -> i32 {
         // 探索局面数
         v.num_searched += 1;
 
         // 探索深さ制限なら
         if depth >= v.max_depth {
-            return 0;
+            let mut black = 0;
+            let mut white = 0;
+            for sq in Square::iter() {
+                let pc = pos.piece_at(sq);
+                if let Some(ref pc) = *pc {
+                    if pos.side_to_move() == pc.color {
+                        black += 1;
+                    } else {
+                        white += 1;
+                    }
+                }
+            }
+            for piece_type in PieceType::iter() {
+                let color = Color::Black;
+                black += pos.hand(Piece { piece_type, color }) as i32;
+                let color = Color::White;
+                white += pos.hand(Piece { piece_type, color }) as i32;
+            }
+
+            if pos.side_to_move() == Color::Black {
+                return black - white;
+            } else {
+                return white - black;
+            }
         }
 
-        let mut best_value = -30000;
+        let mut best_value = alpha;
         let mut moves: Vec<Move> = Vec::new();
-        for sq in Square::iter() {
+        'cut: for sq in Square::iter() {
             let pc = pos.piece_at(sq);
             if let Some(ref pc) = *pc {
                 if pos.side_to_move() == pc.color {
@@ -28,27 +51,35 @@ impl NegaAlpha {
                         let to = bb.pop();
                         let m = Move::Normal { from: sq, to: to, promote: false };
                         if pos.make_move(m).is_ok() {
-                            let value = - NegaAlpha::search(v, pos, depth + 1.);
+                            let value = - NegaAlpha::search(v, pos, depth + 1., -beta, -best_value);
                             if best_value < value {
                                 best_value = value;
                                 if depth == 0. {
                                     v.best_move_pv = m.to_string();
                                 }
                             }
-                            moves.push(m);
-                            pos.unmake_move().unwrap();
+                            if pos.unmake_move().is_ok() {
+                                moves.push(m);
+                            }
+                            if best_value >= beta {
+                                break 'cut;
+                            }
                         }
                         let m = Move::Normal { from: sq, to: to, promote: true };
                         if pos.make_move(m).is_ok() {
-                            let value = - NegaAlpha::search(v, pos, depth + 1.);
+                            let value = - NegaAlpha::search(v, pos, depth + 1., -beta, -best_value);
                             if best_value < value {
                                 best_value = value;
                                 if depth == 0. {
                                     v.best_move_pv = m.to_string();
                                 }
                             }
-                            moves.push(m);
-                            pos.unmake_move().unwrap();
+                            if pos.unmake_move().is_ok() {
+                                moves.push(m);
+                            }
+                            if best_value >= beta {
+                                break 'cut;
+                            }
                         }
                     }
                 }
@@ -58,15 +89,19 @@ impl NegaAlpha {
                     if pos.hand(Piece { piece_type, color }) > 0 {
                         let m = Move::Drop { to: sq, piece_type: piece_type };
                         if pos.make_move(m).is_ok() {
-                            let value = - NegaAlpha::search(v, pos, depth + 1.);
+                            let value = - NegaAlpha::search(v, pos, depth + 1., -beta, -best_value);
                             if best_value < value {
                                 best_value = value;
                                 if depth == 0. {
                                     v.best_move_pv = m.to_string();
                                 }
                             }
-                            moves.push(m);
-                            pos.unmake_move().unwrap();
+                            if pos.unmake_move().is_ok() {
+                                moves.push(m);
+                            }
+                            if best_value >= beta {
+                                break 'cut;
+                            }
                         }
                     }
                 }
@@ -76,14 +111,7 @@ impl NegaAlpha {
         if moves.len() != 0 {
             return best_value;
         } else {
-            if depth == 0. {
-                v.best_move_pv = "resign".to_string();
-            }
-            if pos.side_to_move() == Color::Black {
-                return -30000 + pos.ply() as i32;
-            } else {
-                return 30000 - pos.ply() as i32;
-            }
+            return -30000 + pos.ply() as i32;
         }
     }
 }
