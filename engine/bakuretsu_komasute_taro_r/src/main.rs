@@ -1,4 +1,5 @@
 use std::time::Instant;
+use std::collections::HashMap;
 use shogi::{Color, Move, PieceType, Position, Square};
 use shogi::bitboard::Factory as BBFactory;
 
@@ -200,27 +201,41 @@ impl BakuretsuKomasuteTaroR {
         return pos;
     }
 
-    fn go(eval: Eval, pos: &mut Position) -> String {
+    fn go(eval: Eval, pos: &mut Position, max_time: i32) -> String {
         /*
         思考し、最善手を返す
         */
 
         let mut nega = search::NegaAlpha {
+            start_time: Instant::now(),
+            max_time: max_time,
             num_searched: 0,
-            max_depth: 3.,
+            max_depth: 1.,
             best_move_pv: "resign".to_string(),
             eval: eval,
+            hash_table: search::HashTable {
+                pos: HashMap::new(),
+            }
         };
 
-        let start = Instant::now();
-        let value = search::NegaAlpha::search(&mut nega, pos, 0., -30000, 30000);
-        let end = start.elapsed();
-        let elapsed_time = end.as_secs() as f64 + end.subsec_nanos() as f64 / 1_000_000_000.;
-        let nps = nega.num_searched as f64 / elapsed_time;
-        print!("info depth {} seldepth {} time {} nodes {} ", nega.max_depth, nega.max_depth, elapsed_time, nega.num_searched);
-        println!("score cp {} pv {} nps {}", value, nega.best_move_pv, nps as u64);
+        let mut best_move = "resign".to_string();
+        for depth in 1..10 {
+            nega.max_depth = depth as f32;
+            let value = search::NegaAlpha::search(&mut nega, pos, depth as f32, -30000, 30000);
+            let end = nega.start_time.elapsed();
+            let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
+            let nps = nega.num_searched / elapsed_time as u64;
 
-        return nega.best_move_pv;
+            if elapsed_time < nega.max_time {
+                print!("info depth {} seldepth {} time {} nodes {} ", depth, depth, elapsed_time, nega.num_searched);
+                println!("score cp {} pv {} nps {}", value, nega.best_move_pv, nps);
+                best_move = nega.best_move_pv.clone();
+            } else {
+                break;
+            }
+        }
+
+        return best_move;
     }
 
     fn stop() {
@@ -316,7 +331,37 @@ fn main() {
                 pos = BakuretsuKomasuteTaroR::position(&startpos, moves);
             },
             "go" => {  // 思考して指し手を返答
-                let m = BakuretsuKomasuteTaroR::go(engine.eval.clone(), &mut pos);
+                // 120手で終局想定で時間制御
+                let margin_time = 1000;
+                let mut min_time = 0;
+                let mut max_time = 0;
+                if &inputs[5][..] == "byoyomi" {
+                    let byoyomi: i32 = inputs[6].parse().unwrap();
+                    max_time += byoyomi;
+                    min_time += byoyomi;
+                } else {
+                    if pos.side_to_move() == Color::Black {
+                        let btime: i32 = inputs[2].parse().unwrap();
+                        let binc: i32 = inputs[6].parse().unwrap();
+                        max_time += btime;
+                        max_time += binc;
+                        min_time += binc;
+                    } else {
+                        let wtime: i32 = inputs[4].parse().unwrap();
+                        let winc: i32 = inputs[8].parse().unwrap();
+                        max_time += wtime;
+                        max_time += winc;
+                        min_time += winc;
+                    }
+                }
+                max_time -= margin_time;
+                min_time -= margin_time;
+                let mut remain_move_number = (120 - pos.ply() as i32) / 4;
+                if remain_move_number <= 1 {
+                    remain_move_number = 1
+                }
+                max_time = std::cmp::max(max_time / remain_move_number, min_time);
+                let m = BakuretsuKomasuteTaroR::go(engine.eval.clone(), &mut pos, max_time);
                 println!("bestmove {}", m);
             }
             "stop" => {  // 思考停止コマンド

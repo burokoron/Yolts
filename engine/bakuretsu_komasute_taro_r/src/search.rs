@@ -1,22 +1,64 @@
+use std::collections::HashMap;
+use std::time::Instant;
 use shogi::{Color, Move, PieceType, Position, Square};
 use shogi::piece::Piece;
 
 use crate::Eval;
 
+
+pub struct HashTableValue {
+    depth: f32,
+    upper: i32,
+    lower: i32,
+}
+
+pub struct HashTable {
+    pub pos: HashMap<String, HashTableValue>,
+}
+
+
 pub struct NegaAlpha {
-    pub max_depth: f32,
+    pub start_time: Instant,
+    pub max_time: i32,
     pub num_searched: u64,
+    pub max_depth: f32,
     pub best_move_pv: String,
     pub eval: Eval,
+    pub hash_table: HashTable,
 }
 
 impl NegaAlpha {
-    pub fn search(v: &mut NegaAlpha, pos: &mut Position, depth: f32, alpha: i32, beta: i32) -> i32 {
+    pub fn search(v: &mut NegaAlpha, pos: &mut Position, depth: f32, mut alpha: i32, mut beta: i32) -> i32 {
         // 探索局面数
         v.num_searched += 1;
 
+        // 時間制限なら
+        let end = v.start_time.elapsed();
+        let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
+        if elapsed_time >= v.max_time {
+            return alpha;
+        }
+
+        // 置換表の確認
+        let sfen = pos.to_string();
+        let hash_table_value = v.hash_table.pos.get(&sfen);
+        if let Some(hash_table_value) = hash_table_value {
+            if depth <= hash_table_value.depth {
+                let lower = hash_table_value.lower;
+                let upper = hash_table_value.upper;
+                if lower >= beta {
+                    return lower;
+                }
+                if upper <= alpha || upper == lower {
+                    return  upper;
+                }
+                alpha = alpha.max(lower);
+                beta = beta.max(upper);
+            }
+        }
+
         // 探索深さ制限なら
-        if depth >= v.max_depth {
+        if depth <= 0. {
             let mut value = 0;
             for sq in Square::iter() {
                 let pc = pos.piece_at(sq);
@@ -50,10 +92,10 @@ impl NegaAlpha {
                         let to = bb.pop();
                         let m = Move::Normal { from: sq, to: to, promote: false };
                         if pos.make_move(m).is_ok() {
-                            let value = - NegaAlpha::search(v, pos, depth + 1., -beta, -best_value);
+                            let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
                             if best_value < value {
                                 best_value = value;
-                                if depth == 0. {
+                                if depth == v.max_depth {
                                     v.best_move_pv = m.to_string();
                                 }
                             }
@@ -66,10 +108,10 @@ impl NegaAlpha {
                         }
                         let m = Move::Normal { from: sq, to: to, promote: true };
                         if pos.make_move(m).is_ok() {
-                            let value = - NegaAlpha::search(v, pos, depth + 1., -beta, -best_value);
+                            let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
                             if best_value < value {
                                 best_value = value;
-                                if depth == 0. {
+                                if depth == v.max_depth {
                                     v.best_move_pv = m.to_string();
                                 }
                             }
@@ -88,10 +130,10 @@ impl NegaAlpha {
                     if pos.hand(Piece { piece_type, color }) > 0 {
                         let m = Move::Drop { to: sq, piece_type: piece_type };
                         if pos.make_move(m).is_ok() {
-                            let value = - NegaAlpha::search(v, pos, depth + 1., -beta, -best_value);
+                            let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
                             if best_value < value {
                                 best_value = value;
-                                if depth == 0. {
+                                if depth == v.max_depth {
                                     v.best_move_pv = m.to_string();
                                 }
                             }
@@ -105,6 +147,21 @@ impl NegaAlpha {
                     }
                 }
             }
+        }
+
+        // 置換表へ登録
+        let sfen = pos.to_string();
+        let hash_table_value = v.hash_table.pos.entry(sfen).or_insert(HashTableValue { depth: -1., upper: 30000, lower: -30000 });
+        if depth > hash_table_value.depth {
+            if best_value <= alpha {
+                hash_table_value.upper = best_value;
+            } else if best_value >= beta {
+                hash_table_value.lower = best_value;
+            } else {
+                hash_table_value.upper = best_value;
+                hash_table_value.lower = best_value;
+            }
+            hash_table_value.depth = depth;
         }
 
         if moves.len() != 0 {
