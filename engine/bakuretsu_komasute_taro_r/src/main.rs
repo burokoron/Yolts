@@ -224,7 +224,11 @@ impl BakuretsuKomasuteTaroR {
             let value = search::NegaAlpha::search(&mut nega, pos, depth as f32, -30000, 30000);
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
-            let nps = nega.num_searched / elapsed_time as u64;
+            let nps = if elapsed_time != 0 {
+                nega.num_searched * 1000 / elapsed_time as u64
+            } else {
+                nega.num_searched
+            };
 
             if elapsed_time < nega.max_time {
                 print!("info depth {} seldepth {} time {} nodes {} ", depth, depth, elapsed_time, nega.num_searched);
