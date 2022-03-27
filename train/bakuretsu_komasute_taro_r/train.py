@@ -239,9 +239,9 @@ def main(path: str) -> None:
                     )
 
     # 評価パラメータを保存
-    eval_dict = (pieces_dict, pieces_in_hand_dict)
-    with open("eval.json", "w") as fb:
-        json.dump(eval_dict, fb)
+    eval_dict = {"pieces_dict": pieces_dict, "pieces_in_hand_dict": pieces_in_hand_dict}
+    with open("eval.json", "w") as f:
+        json.dump(eval_dict, f)
 
 
 if __name__ == "__main__":
@@ -251,7 +251,7 @@ if __name__ == "__main__":
             学習局面が保存されているフォルダパス
     """
 
-    parser = argparse.ArgumentParser(description="爆裂駒捨太郎の学習")
+    parser = argparse.ArgumentParser(description="爆裂駒捨太郎Rの学習")
     parser.add_argument("folder_path", help="学習局面が保存されているフォルダパス")
     args = parser.parse_args()
 

@@ -1,13 +1,21 @@
 use std::time::Instant;
-use shogi::{Move, Position};
+use shogi::{Color, Move, PieceType, Position, Square};
 use shogi::bitboard::Factory as BBFactory;
 
 mod search;
+
+
+#[derive(Clone)]
+pub struct Eval {
+    pieces_in_board: Vec<Vec<Vec<i32>>>,
+    pieces_in_hand: Vec<Vec<Vec<i32>>>,
+}
 
 struct BakuretsuKomasuteTaroR {
     engine_name: String,
     author: String,
     eval_file_path: String,
+    eval: Eval,
 }
 
 impl BakuretsuKomasuteTaroR {
@@ -26,10 +34,119 @@ impl BakuretsuKomasuteTaroR {
         println!("usiok");
     }
 
-    fn isready() {
+    fn isready(v: &mut BakuretsuKomasuteTaroR) {
         /*
         対局の準備をする
         */
+
+        // 評価関数の読み込み
+        let eval_file = std::fs::OpenOptions::new().read(true).write(true).open(&v.eval_file_path).expect("Not Found eval file.");
+        let reader = std::io::BufReader::new(eval_file);
+        let eval: serde_json::Value = serde_json::from_reader(reader).expect("Can not Read json file.");
+        // 盤面
+        for color in Color::iter() {
+            for sq in Square::iter() {
+                let value = eval["pieces_dict"][sq.index().to_string()]["0"].as_i64().unwrap();
+                v.eval.pieces_in_board[color.index()][sq.index()][0] = value as i32;
+                for piece in PieceType::iter() {
+                    let mut piece_idx = {
+                        match piece.index() {
+                            0 => { 8 },
+                            1 => { 6 },
+                            2 => { 5 },
+                            3 => { 7 },
+                            4 => { 4 },
+                            5 => { 3 },
+                            6 => { 2 },
+                            7 => { 1 },
+                            8 => { 14 },
+                            9 => { 13 },
+                            10 => { 12 },
+                            11 => { 11 },
+                            12 => { 10 },
+                            13 => { 9 },
+                            _ => unreachable!(),
+                        }
+                    };
+                    if color == Color::White {
+                        piece_idx += 16;
+                    }
+                    let value = eval["pieces_dict"][sq.index().to_string()][piece_idx.to_string()].as_i64().unwrap();
+                    v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+1] = value as i32;
+                }
+            }
+        }
+        // 持ち駒
+        for color in Color::iter() {
+            for piece in PieceType::iter() {
+                match piece.index() {
+                    1 => {
+                        let piece_idx = {
+                            if color == Color::Black { 6 } else { 13 }
+                        };
+                        for i in 0..3 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    2 => {
+                        let piece_idx = {
+                            if color == Color::Black { 5 } else { 12 }
+                        };
+                        for i in 0..3 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    3 => {
+                        let piece_idx = {
+                            if color == Color::Black { 4 } else { 11 }
+                        };
+                        for i in 0..5 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    4 => {
+                        let piece_idx = {
+                            if color == Color::Black { 3 } else { 10 }
+                        };
+                        for i in 0..5 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    5 => {
+                        let piece_idx = {
+                            if color == Color::Black { 2 } else { 9 }
+                        };
+                        for i in 0..5 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    6 => {
+                        let piece_idx = {
+                            if color == Color::Black { 1 } else { 8 }
+                        };
+                        for i in 0..5 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    7 => {
+                        let piece_idx = {
+                            if color == Color::Black { 0 } else { 7 }
+                        };
+                        for i in 0..19 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    _ => (),
+                }
+            }
+        }
         
         println!("readyok");
     }
@@ -83,7 +200,7 @@ impl BakuretsuKomasuteTaroR {
         return pos;
     }
 
-    fn go(pos: &mut Position) -> String {
+    fn go(eval: Eval, pos: &mut Position) -> String {
         /*
         思考し、最善手を返す
         */
@@ -92,6 +209,7 @@ impl BakuretsuKomasuteTaroR {
             num_searched: 0,
             max_depth: 3.,
             best_move_pv: "resign".to_string(),
+            eval: eval,
         };
 
         let start = Instant::now();
@@ -99,7 +217,8 @@ impl BakuretsuKomasuteTaroR {
         let end = start.elapsed();
         let elapsed_time = end.as_secs() as f64 + end.subsec_nanos() as f64 / 1_000_000_000.;
         let nps = nega.num_searched as f64 / elapsed_time;
-        println!("info depth {} time {} nodes {} score cp {} nps {}", nega.max_depth, elapsed_time, nega.num_searched, value, nps as u64);
+        print!("info depth {} seldepth {} time {} nodes {} ", nega.max_depth, nega.max_depth, elapsed_time, nega.num_searched);
+        println!("score cp {} pv {} nps {}", value, nega.best_move_pv, nps as u64);
 
         return nega.best_move_pv;
     }
@@ -143,7 +262,11 @@ fn main() {
     let engine = &mut BakuretsuKomasuteTaroR {
         engine_name: "爆裂駒捨太郎R".to_string(),
         author: "burokoron".to_string(),
-        eval_file_path: "eval.pkl".to_string(),
+        eval_file_path: "eval.json".to_string(),
+        eval: Eval {
+            pieces_in_board: vec![vec![vec![0; 31]; 81]; 2],
+            pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
+        }
     };
     BBFactory::init();
     let mut pos = Position::new();
@@ -163,7 +286,7 @@ fn main() {
                 BakuretsuKomasuteTaroR::usi(&engine);
             },
             "isready" => {  // 対局準備
-                BakuretsuKomasuteTaroR::isready();
+                BakuretsuKomasuteTaroR::isready(engine);
             },
             "setoption" => {  // エンジンのパラメータ設定
                 BakuretsuKomasuteTaroR::setoption(engine, inputs[2].clone(), inputs[4].clone());
@@ -193,7 +316,7 @@ fn main() {
                 pos = BakuretsuKomasuteTaroR::position(&startpos, moves);
             },
             "go" => {  // 思考して指し手を返答
-                let m = BakuretsuKomasuteTaroR::go(&mut pos);
+                let m = BakuretsuKomasuteTaroR::go(engine.eval.clone(), &mut pos);
                 println!("bestmove {}", m);
             }
             "stop" => {  // 思考停止コマンド

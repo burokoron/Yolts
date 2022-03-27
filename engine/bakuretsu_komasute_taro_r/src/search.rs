@@ -1,10 +1,13 @@
 use shogi::{Color, Move, PieceType, Position, Square};
 use shogi::piece::Piece;
 
+use crate::Eval;
+
 pub struct NegaAlpha {
     pub max_depth: f32,
     pub num_searched: u64,
     pub best_move_pv: String,
+    pub eval: Eval,
 }
 
 impl NegaAlpha {
@@ -14,29 +17,25 @@ impl NegaAlpha {
 
         // 探索深さ制限なら
         if depth >= v.max_depth {
-            let mut black = 0;
-            let mut white = 0;
+            let mut value = 0;
             for sq in Square::iter() {
                 let pc = pos.piece_at(sq);
                 if let Some(ref pc) = *pc {
-                    if pos.side_to_move() == pc.color {
-                        black += 1;
-                    } else {
-                        white += 1;
-                    }
+                    value += v.eval.pieces_in_board[pc.color.index()][sq.index()][pc.piece_type.index()+1];
+                } else {
+                    value += v.eval.pieces_in_board[0][sq.index()][0];
                 }
             }
-            for piece_type in PieceType::iter() {
-                let color = Color::Black;
-                black += pos.hand(Piece { piece_type, color }) as i32;
-                let color = Color::White;
-                white += pos.hand(Piece { piece_type, color }) as i32;
+            for piece_type in [PieceType::Rook, PieceType::Bishop, PieceType::Gold, PieceType::Silver, PieceType::Knight, PieceType::Lance, PieceType::Pawn] {
+                for color in Color::iter() {
+                    value += v.eval.pieces_in_hand[color.index()][piece_type.index()][pos.hand(Piece { piece_type, color }) as usize];
+                }
             }
 
             if pos.side_to_move() == Color::Black {
-                return black - white;
+                return value;
             } else {
-                return white - black;
+                return -value;
             }
         }
 
