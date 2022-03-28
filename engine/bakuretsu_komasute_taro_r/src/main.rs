@@ -215,7 +215,10 @@ impl BakuretsuKomasuteTaroR {
             eval: eval,
             hash_table: search::HashTable {
                 pos: HashMap::new(),
-            }
+            },
+            from_to_move_ordering: search::MoveOrdering {
+                pos: HashMap::new(),
+            },
         };
 
         let mut best_move = "resign".to_string();
@@ -343,6 +346,13 @@ fn main() {
                     let byoyomi: i32 = inputs[6].parse().unwrap();
                     max_time += byoyomi;
                     min_time += byoyomi;
+                    if pos.side_to_move() == Color::Black {
+                        let btime: i32 = inputs[2].parse().unwrap();
+                        max_time += btime;
+                    } else {
+                        let wtime: i32 = inputs[4].parse().unwrap();
+                        max_time += wtime;
+                    }
                 } else {
                     if pos.side_to_move() == Color::Black {
                         let btime: i32 = inputs[2].parse().unwrap();
