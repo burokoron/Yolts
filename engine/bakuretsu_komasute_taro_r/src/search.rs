@@ -78,7 +78,7 @@ impl NegaAlpha {
         }
     }
 
-    pub fn search(v: &mut NegaAlpha, pos: &mut Position, mut depth: f32, mut alpha: i32, mut beta: i32) -> i32 {
+    pub fn search(v: &mut NegaAlpha, pos: &mut Position, depth: f32, mut alpha: i32, mut beta: i32) -> i32 {
         // 探索局面数
         v.num_searched += 1;
 
