@@ -211,12 +211,16 @@ impl BakuretsuKomasuteTaroR {
             max_time: max_time,
             num_searched: 0,
             max_depth: 1.,
+            max_board_number: pos.ply(),
             best_move_pv: "resign".to_string(),
             eval: eval,
             hash_table: search::HashTable {
                 pos: HashMap::new(),
             },
             from_to_move_ordering: search::MoveOrdering {
+                pos: HashMap::new(),
+            },
+            brother_from_to_move_ordering: search::BrotherMoveOrdering {
                 pos: HashMap::new(),
             },
         };
@@ -234,7 +238,7 @@ impl BakuretsuKomasuteTaroR {
             };
 
             if elapsed_time < nega.max_time {
-                print!("info depth {} seldepth {} time {} nodes {} ", depth, depth, elapsed_time, nega.num_searched);
+                print!("info depth {} seldepth {} time {} nodes {} ", depth, nega.max_board_number - pos.ply(), elapsed_time, nega.num_searched);
                 println!("score cp {} pv {} nps {}", value, nega.best_move_pv, nps);
                 best_move = nega.best_move_pv.clone();
             } else {

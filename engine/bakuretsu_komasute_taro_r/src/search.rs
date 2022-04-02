@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use shogi::{Color, Move, PieceType, Position, Square};
 use shogi::piece::Piece;
@@ -20,16 +20,22 @@ pub struct MoveOrdering {
     pub pos: HashMap<String, Vec<(Move, i32)>>,
 }
 
+pub struct BrotherMoveOrdering {
+    pub pos: HashMap<u16, HashMap<String, i32>>,
+}
+
 
 pub struct NegaAlpha {
     pub start_time: Instant,
     pub max_time: i32,
     pub num_searched: u64,
     pub max_depth: f32,
+    pub max_board_number: u16,
     pub best_move_pv: String,
     pub eval: Eval,
     pub hash_table: HashTable,
     pub from_to_move_ordering: MoveOrdering,
+    pub brother_from_to_move_ordering: BrotherMoveOrdering,
 }
 
 impl NegaAlpha {
@@ -78,9 +84,14 @@ impl NegaAlpha {
         }
     }
 
-    pub fn search(v: &mut NegaAlpha, pos: &mut Position, depth: f32, mut alpha: i32, mut beta: i32) -> i32 {
+    pub fn search(v: &mut NegaAlpha, pos: &mut Position, mut depth: f32, mut alpha: i32, mut beta: i32) -> i32 {
         // 探索局面数
         v.num_searched += 1;
+
+        // 最大手数の計算
+        if v.max_board_number < pos.ply() {
+            v.max_board_number = pos.ply();
+        }
 
         // 時間制限なら
         let end = v.start_time.elapsed();
@@ -103,7 +114,7 @@ impl NegaAlpha {
                     return  upper;
                 }
                 alpha = alpha.max(lower);
-                beta = beta.max(upper);
+                beta = beta.min(upper);
             }
         }
 
@@ -112,8 +123,36 @@ impl NegaAlpha {
             return NegaAlpha::evaluate(v, pos);
         }
 
+        // 王手ならちょっと延長
+        if (pos.in_check(Color::Black) || pos.in_check(Color::White)) && v.max_depth - 1. > depth {
+            depth += 1.
+        }
+
+        // Mate Distance Pruning
+        let mating_value = -30000 + pos.ply() as i32;
+        if mating_value > alpha {
+            alpha = mating_value;
+            if beta <= mating_value {
+                return mating_value
+            }
+        }
+        let mating_value = 30000 - pos.ply() as i32;
+        if mating_value < beta {
+            beta = mating_value;
+            if alpha >= mating_value {
+                return mating_value
+            }
+        }
+
+        // Futility Pruning
+        let value = NegaAlpha::evaluate(v, pos);
+        if value <= alpha - 400 * depth as i32 {
+            return value
+        }
+
         let mut best_value = alpha;
         let mut moves: Vec<Move> = Vec::new();
+        let mut ignore_moves: HashSet<String> = HashSet::new();
         // 現局面における合法手の評価値が高かった順に調べる
         let mut move_list: Vec<Move> = Vec::new();
         let from_to_move_ordering = v.from_to_move_ordering.pos.get(&sfen);
@@ -122,12 +161,33 @@ impl NegaAlpha {
             idx.sort_unstable_by(|&i, &j| (-from_to_move_ordering[i].1).cmp(&(-from_to_move_ordering[j].1)));
             for i in idx {
                 move_list.push(from_to_move_ordering[i].0);
+                ignore_moves.insert(from_to_move_ordering[i].0.to_string());
+            }
+        } else {
+            // 兄弟局面の着手の評価値が高かった順に調べる
+            let brother_from_to_move_ordering = v.brother_from_to_move_ordering.pos.get(&pos.ply());
+            if let Some(brother_from_to_move_ordering) = brother_from_to_move_ordering {
+                let mut brother = Vec::new();
+                for (k, v) in brother_from_to_move_ordering {
+                    brother.push((k, *v));
+                }
+                let mut idx = (0..brother_from_to_move_ordering.len()).collect::<Vec<_>>();
+                idx.sort_unstable_by(|&i, &j| (-brother[i].1).cmp(&(-brother[j].1)));
+                for i in idx {
+                    move_list.push(Move::from_sfen(&brother[i].0).unwrap());
+                    ignore_moves.insert(brother[i].0.to_string());
+                }
             }
         }
         let mut from_to_move_ordering = Vec::new();
+        let mut brother_from_to_move_ordering: HashMap<String, i32> = HashMap::new();
+
         for m in move_list {
             if pos.make_move(m).is_ok() {
                 let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
+                // ムーブオーダリング登録
+                let brother = brother_from_to_move_ordering.entry(m.to_string()).or_insert(value);
+                *brother = (*brother as f32 * 0.9 + value as f32 * 0.1) as i32;
                 if best_value < value {
                     // ムーブオーダリング登録
                     from_to_move_ordering.push((m, value));
@@ -154,8 +214,14 @@ impl NegaAlpha {
                     while bb.is_any() {
                         let to = bb.pop();
                         let m = Move::Normal { from: sq, to: to, promote: false };
+                        if ignore_moves.contains(&m.to_string()) {
+                            continue;
+                        }
                         if pos.make_move(m).is_ok() {
                             let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
+                            // ムーブオーダリング登録
+                            let brother = brother_from_to_move_ordering.entry(m.to_string()).or_insert(value);
+                            *brother = (*brother as f32 * 0.9 + value as f32 * 0.1) as i32;
                             if best_value < value {
                                 // ムーブオーダリング登録
                                 from_to_move_ordering.push((m, value));
@@ -172,8 +238,14 @@ impl NegaAlpha {
                             }
                         }
                         let m = Move::Normal { from: sq, to: to, promote: true };
+                        if ignore_moves.contains(&m.to_string()) {
+                            continue;
+                        }
                         if pos.make_move(m).is_ok() {
                             let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
+                            // ムーブオーダリング登録
+                            let brother = brother_from_to_move_ordering.entry(m.to_string()).or_insert(value);
+                            *brother = (*brother as f32 * 0.9 + value as f32 * 0.1) as i32;
                             if best_value < value {
                                 // ムーブオーダリング登録
                                 from_to_move_ordering.push((m, value));
@@ -196,8 +268,14 @@ impl NegaAlpha {
                     let color = pos.side_to_move();
                     if pos.hand(Piece { piece_type, color }) > 0 {
                         let m = Move::Drop { to: sq, piece_type: piece_type };
+                        if ignore_moves.contains(&m.to_string()) {
+                            continue;
+                        }
                         if pos.make_move(m).is_ok() {
                             let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
+                            // ムーブオーダリング登録
+                            let brother = brother_from_to_move_ordering.entry(m.to_string()).or_insert(value);
+                            *brother = (*brother as f32 * 0.9 + value as f32 * 0.1) as i32;
                             if best_value < value {
                                 // ムーブオーダリング登録
                                 from_to_move_ordering.push((m, value));
@@ -218,6 +296,7 @@ impl NegaAlpha {
             }
         }
         v.from_to_move_ordering.pos.insert(sfen, from_to_move_ordering);
+        v.brother_from_to_move_ordering.pos.insert(pos.ply(), brother_from_to_move_ordering);
 
         // 置換表へ登録
         let sfen = NegaAlpha::sfen(pos);
