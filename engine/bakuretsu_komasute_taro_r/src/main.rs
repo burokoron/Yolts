@@ -1,9 +1,8 @@
 use std::time::Instant;
 use std::collections::HashMap;
-use shogi::{Color, Move, PieceType, Position, Square};
-use shogi::bitboard::Factory as BBFactory;
+use yasai::{ Color, Square, PieceType, Position };
 
-mod search;
+//mod search;
 
 
 #[derive(Clone)]
@@ -45,106 +44,71 @@ impl BakuretsuKomasuteTaroR {
         let reader = std::io::BufReader::new(eval_file);
         let eval: serde_json::Value = serde_json::from_reader(reader).expect("Can not Read json file.");
         // 盤面
-        for color in Color::iter() {
-            for sq in Square::iter() {
+        for color in Color::ALL {
+            for sq in Square::ALL {
                 let value = eval["pieces_dict"][sq.index().to_string()]["0"].as_i64().unwrap();
                 v.eval.pieces_in_board[color.index()][sq.index()][0] = value as i32;
-                for piece in PieceType::iter() {
-                    let mut piece_idx = {
-                        match piece.index() {
-                            0 => { 8 },
-                            1 => { 6 },
-                            2 => { 5 },
-                            3 => { 7 },
-                            4 => { 4 },
-                            5 => { 3 },
-                            6 => { 2 },
-                            7 => { 1 },
-                            8 => { 14 },
-                            9 => { 13 },
-                            10 => { 12 },
-                            11 => { 11 },
-                            12 => { 10 },
-                            13 => { 9 },
-                            _ => unreachable!(),
-                        }
-                    };
-                    if color == Color::White {
-                        piece_idx += 16;
+                for piece in PieceType::ALL {
+                    if color == Color::Black {
+                        let value = eval["pieces_dict"][sq.index().to_string()][(piece.index()+1).to_string()].as_i64().unwrap();
+                        v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+1] = value as i32;
+                    } else {
+                        let value = eval["pieces_dict"][sq.index().to_string()][(piece.index()+17).to_string()].as_i64().unwrap();
+                        v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+17] = value as i32;
                     }
-                    let value = eval["pieces_dict"][sq.index().to_string()][piece_idx.to_string()].as_i64().unwrap();
-                    v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+1] = value as i32;
                 }
             }
         }
         // 持ち駒
-        for color in Color::iter() {
-            for piece in PieceType::iter() {
+        for color in Color::ALL {
+            for piece in PieceType::ALL_HAND {
+                let piece_idx = {
+                    if color == Color::Black { piece.index() } else { piece.index() + 7 }
+                };
                 match piece.index() {
+                    0 => {
+                        for i in 0..19 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
                     1 => {
-                        let piece_idx = {
-                            if color == Color::Black { 6 } else { 13 }
-                        };
-                        for i in 0..3 {
+                        for i in 0..5 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
                     2 => {
-                        let piece_idx = {
-                            if color == Color::Black { 5 } else { 12 }
-                        };
-                        for i in 0..3 {
+                        for i in 0..5 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
                     3 => {
-                        let piece_idx = {
-                            if color == Color::Black { 4 } else { 11 }
-                        };
                         for i in 0..5 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
                     4 => {
-                        let piece_idx = {
-                            if color == Color::Black { 3 } else { 10 }
-                        };
                         for i in 0..5 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
                     5 => {
-                        let piece_idx = {
-                            if color == Color::Black { 2 } else { 9 }
-                        };
-                        for i in 0..5 {
+                        for i in 0..3 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
                     6 => {
-                        let piece_idx = {
-                            if color == Color::Black { 1 } else { 8 }
-                        };
-                        for i in 0..5 {
+                        for i in 0..3 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
-                    7 => {
-                        let piece_idx = {
-                            if color == Color::Black { 0 } else { 7 }
-                        };
-                        for i in 0..19 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    _ => (),
+                    _ => unreachable!(),
                 }
             }
         }
@@ -192,11 +156,15 @@ impl BakuretsuKomasuteTaroR {
                 開始局面から現在までの手順
         */
 
+        /*
         let mut pos = Position::new();
         pos.set_sfen(startpos).unwrap();
         for m in moves {
             pos.make_move(Move::from_sfen(m).unwrap()).unwrap();
         }
+        */
+
+        let mut pos = Position::default();
 
         return pos;
     }
@@ -206,6 +174,7 @@ impl BakuretsuKomasuteTaroR {
         思考し、最善手を返す
         */
 
+        /*
         let mut nega = search::NegaAlpha {
             start_time: Instant::now(),
             max_time: max_time,
@@ -224,8 +193,10 @@ impl BakuretsuKomasuteTaroR {
                 pos: HashMap::new(),
             },
         };
+        */
 
         let mut best_move = "resign".to_string();
+        /*
         for depth in 1..10 {
             nega.max_depth = depth as f32;
             let value = search::NegaAlpha::search(&mut nega, pos, depth as f32, -30000, 30000);
@@ -245,6 +216,7 @@ impl BakuretsuKomasuteTaroR {
                 break;
             }
         }
+        */
 
         return best_move;
     }
@@ -294,8 +266,7 @@ fn main() {
             pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
         }
     };
-    BBFactory::init();
-    let mut pos = Position::new();
+    let mut pos = Position::default();
 
     loop {
         // 入力の受け取り
@@ -340,6 +311,7 @@ fn main() {
                     }
                 };
                 pos = BakuretsuKomasuteTaroR::position(&startpos, moves);
+                println!("{pos}");
             },
             "go" => {  // 思考して指し手を返答
                 // 120手で終局想定で時間制御
