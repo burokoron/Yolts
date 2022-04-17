@@ -72,37 +72,13 @@ impl BakuretsuKomasuteTaroR {
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
-                    1 => {
+                    1 | 2 | 3 | 4 => {
                         for i in 0..5 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
-                    2 => {
-                        for i in 0..5 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    3 => {
-                        for i in 0..5 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    4 => {
-                        for i in 0..5 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    5 => {
-                        for i in 0..3 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    6 => {
+                    5 | 6 => {
                         for i in 0..3 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
@@ -164,6 +140,7 @@ impl BakuretsuKomasuteTaroR {
         }
         */
 
+        println!("{startpos} {:?}", moves);
         let mut pos = Position::default();
 
         return pos;
