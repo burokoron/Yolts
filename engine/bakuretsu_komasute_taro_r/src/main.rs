@@ -1,8 +1,8 @@
 use std::time::Instant;
 use std::collections::HashMap;
-use yasai::{ Color, Move, Square, Rank, File, Piece, PieceType, Position };
+use yasai::{ Color, Move, MoveType, Square, Rank, File, Piece, PieceType, Position };
 
-//mod search;
+mod search;
 
 
 #[derive(Clone)]
@@ -54,7 +54,7 @@ impl BakuretsuKomasuteTaroR {
                         v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+1] = value as i32;
                     } else {
                         let value = eval["pieces_dict"][sq.index().to_string()][(piece.index()+17).to_string()].as_i64().unwrap();
-                        v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+17] = value as i32;
+                        v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+1] = value as i32;
                     }
                 }
             }
@@ -438,14 +438,13 @@ impl BakuretsuKomasuteTaroR {
         思考し、最善手を返す
         */
 
-        /*
         let mut nega = search::NegaAlpha {
             start_time: Instant::now(),
             max_time: max_time,
             num_searched: 0,
             max_depth: 1.,
             max_board_number: pos.ply(),
-            best_move_pv: "resign".to_string(),
+            best_move_pv: None,
             eval: eval,
             hash_table: search::HashTable {
                 pos: HashMap::new(),
@@ -457,10 +456,8 @@ impl BakuretsuKomasuteTaroR {
                 pos: HashMap::new(),
             },
         };
-        */
 
         let mut best_move = "resign".to_string();
-        /*
         for depth in 1..10 {
             nega.max_depth = depth as f32;
             let value = search::NegaAlpha::search(&mut nega, pos, depth as f32, -30000, 30000);
@@ -473,15 +470,65 @@ impl BakuretsuKomasuteTaroR {
             };
 
             if elapsed_time < nega.max_time {
+                best_move = {
+                    if let Some(ref m) = nega.best_move_pv {
+                        match m.move_type() {
+                            MoveType::Normal {
+                                from,
+                                to,
+                                is_promotion,
+                                piece: _,
+                            } => {
+                                let from = format!("{}{}", ('1' as u8 + from.index() as u8 / 9 as u8) as char, ('a' as u8 + from.index() as u8 % 9 as u8) as char);
+                                let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
+                                let is_promotion = {
+                                    if is_promotion { "+" } else { "" }
+                                };
+                                format!("{from}{to}{is_promotion}")
+                            },
+                            MoveType::Drop { to, piece } => {
+                                let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
+                                let piece = {
+                                    match piece {
+                                        Piece::BFU | Piece::WFU => {
+                                            "P*".to_string()
+                                        },
+                                        Piece::BKY | Piece::WKY => {
+                                            "L*".to_string()
+                                        },
+                                        Piece::BKE | Piece::WKE => {
+                                            "N*".to_string()
+                                        },
+                                        Piece::BGI | Piece::WGI => {
+                                            "S*".to_string()
+                                        },
+                                        Piece::BKI | Piece::WKI => {
+                                            "G*".to_string()
+                                        },
+                                        Piece::BKA | Piece::WKA => {
+                                            "B*".to_string()
+                                        },
+                                        Piece::BHI | Piece::WHI => {
+                                            "R*".to_string()
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                };
+                                format!("{piece}{to}")
+                            },
+
+                        }
+                    } else {
+                        "resign".to_string()
+                    }
+                };
                 print!("info depth {} seldepth {} time {} nodes {} ", depth, nega.max_board_number - pos.ply(), elapsed_time, nega.num_searched);
-                println!("score cp {} pv {} nps {}", value, nega.best_move_pv, nps);
-                best_move = nega.best_move_pv.clone();
+                println!("score cp {} pv {} nps {}", value, best_move, nps);
             } else {
                 break;
             }
         }
-        */
-
+        
         return best_move;
     }
 
@@ -575,7 +622,6 @@ fn main() {
                     }
                 };
                 pos = BakuretsuKomasuteTaroR::position(&startpos, moves);
-                println!("{pos}");
             },
             "go" => {  // 思考して指し手を返答
                 // 120手で終局想定で時間制御
