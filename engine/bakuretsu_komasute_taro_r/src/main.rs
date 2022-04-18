@@ -1,6 +1,6 @@
 use std::time::Instant;
 use std::collections::HashMap;
-use yasai::{ Color, Square, PieceType, Position };
+use yasai::{ Color, Move, Square, Rank, File, Piece, PieceType, Position };
 
 //mod search;
 
@@ -132,16 +132,303 @@ impl BakuretsuKomasuteTaroR {
                 開始局面から現在までの手順
         */
 
-        /*
-        let mut pos = Position::new();
-        pos.set_sfen(startpos).unwrap();
-        for m in moves {
-            pos.make_move(Move::from_sfen(m).unwrap()).unwrap();
+        // sfenを分解
+        let startpos: Vec<String> = {
+            startpos.split_whitespace()
+                .map(|x| x.parse().unwrap())
+                .collect()
+        };
+        
+        // sfenの盤面部分のエンコード
+        let mut pieces: Vec<Option<Piece>> = Vec::new();
+        let mut promote = false;
+        for c in startpos[0].chars() {
+            match c {
+                'P' => {
+                    if promote {
+                        pieces.push(Some(Piece::BTO));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BFU));
+                    }
+                },
+                'L' => {
+                    if promote {
+                        pieces.push(Some(Piece::BNY));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BKY));
+                    }
+                },
+                'N' => {
+                    if promote {
+                        pieces.push(Some(Piece::BNK));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BKE));
+                    }
+                },
+                'S' => {
+                    if promote {
+                        pieces.push(Some(Piece::BNG));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BGI));
+                    }
+                },
+                'G' => {
+                    if promote {
+                        panic!("Gold is not promotable.");
+                    } else {
+                        pieces.push(Some(Piece::BKI));
+                    }
+                },
+                'B' => {
+                    if promote {
+                        pieces.push(Some(Piece::BUM));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BKA));
+                    }
+                },
+                'R' => {
+                    if promote {
+                        pieces.push(Some(Piece::BRY));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BHI));
+                    }
+                },
+                'K' => {
+                    if promote {
+                        panic!("King is not promotable.");
+                    } else {
+                        pieces.push(Some(Piece::BOU));
+                    }
+                },
+                'p' => {
+                    if promote {
+                        pieces.push(Some(Piece::WTO));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WFU));
+                    }
+                },
+                'l' => {
+                    if promote {
+                        pieces.push(Some(Piece::WNY));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WKY));
+                    }
+                },
+                'n' => {
+                    if promote {
+                        pieces.push(Some(Piece::WNK));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WKE));
+                    }
+                },
+                's' => {
+                    if promote {
+                        pieces.push(Some(Piece::WNG));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WGI));
+                    }
+                },
+                'g' => {
+                    if promote {
+                        panic!("Gold is not promotable.");
+                    } else {
+                        pieces.push(Some(Piece::WKI));
+                    }
+                },
+                'b' => {
+                    if promote {
+                        pieces.push(Some(Piece::WUM));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WKA));
+                    }
+                },
+                'r' => {
+                    if promote {
+                        pieces.push(Some(Piece::WRY));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WHI));
+                    }
+                },
+                'k' => {
+                    if promote {
+                        panic!("King is not promotable.");
+                    } else {
+                        pieces.push(Some(Piece::WOU));
+                    }
+                },
+                '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                    for _ in 0..(c as i32 - '0' as i32) {
+                        pieces.push(None);
+                    }
+                },
+                '+' => promote = true,
+                '/' => (),
+                _ => unreachable!(),
+            }
         }
-        */
+        assert_eq!(pieces.len(), 81, "Cannot encode sfen.");
 
-        println!("{startpos} {:?}", moves);
-        let mut pos = Position::default();
+        // エンコードした局面をbitboardの形式に変換
+        let mut board: [Option<Piece>; 81] = [None; 81];
+        for i in 0..pieces.len() {
+            board[(8 - i % 9 ) * 9 + i / 9] = pieces[i];
+        }
+
+        // 手番をエンコード
+        let side_to_move = {
+            match &startpos[1][..] {
+                "b" => Color::Black,
+                "w" => Color::White,
+                _ => unreachable!(),
+            }
+        };
+
+        // 持ち駒をエンコード
+        let mut hand_nums = [[0; 7]; 2];
+        let mut side_to_move_idx = 0;
+        let mut piece_type_idx = 0;
+        let mut piece_nums = 1;
+        for c in startpos[2].chars() {
+            match c {
+                '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0' => {
+                    if piece_nums == 1 {
+                        piece_nums = c as u8 - '0' as u8;
+                    } else {
+                        piece_nums *= 10;
+                        piece_nums += c as u8 - '0' as u8;
+                    }
+                },
+                '-' => piece_nums = 0,
+                _ => {
+                    hand_nums[side_to_move_idx][piece_type_idx] = piece_nums;
+                    piece_nums = 1;
+                }
+            }
+            match c {
+                'P' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 0;
+                },
+                'L' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 1;
+                },
+                'N' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 2;
+                },
+                'S' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 3;
+                },
+                'G' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 4;
+                },
+                'B' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 5;
+                },
+                'R' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 6;
+                },
+                'p' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 0;
+                },
+                'l' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 1;
+                },
+                'n' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 2;
+                },
+                's' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 3;
+                },
+                'g' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 4;
+                },
+                'b' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 5;
+                },
+                'r' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 6;
+                },
+                '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0' | '-' => (),
+                _ => unreachable!(),
+            }
+        }
+        hand_nums[side_to_move_idx][piece_type_idx] = piece_nums;
+
+        // 手数のエンコード
+        let ply: u32 = startpos[3].parse().unwrap();
+
+        // bitboardに局面を反映
+        let mut pos = Position::new(board, hand_nums, side_to_move, ply);
+
+        // 指し手を進める
+        for m in moves {
+            let m: Vec<char> = m.chars().collect();
+            let m = {
+                if m[1] == '*' {
+                    let to = Square::new(File::ALL[m[2] as usize - '1' as usize], Rank::ALL[m[3] as usize - 'a' as usize]);
+                    let piece = {
+                        if pos.side_to_move() == Color::Black {
+                            match m[0] {
+                                'P' => Piece::BFU,
+                                'L' => Piece::BKY,
+                                'N' => Piece::BKE,
+                                'S' => Piece::BGI,
+                                'G' => Piece::BKI,
+                                'B' => Piece::BKA,
+                                'R' => Piece::BHI,
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            match m[0] {
+                                'P' => Piece::WFU,
+                                'L' => Piece::WKY,
+                                'N' => Piece::WKE,
+                                'S' => Piece::WGI,
+                                'G' => Piece::WKI,
+                                'B' => Piece::WKA,
+                                'R' => Piece::WHI,
+                                _ => unreachable!(),
+                            }
+                        }
+                    };
+                    Move::new_drop(to, piece)
+                } else {
+                    let from = Square::new(File::ALL[m[0] as usize - '1' as usize], Rank::ALL[m[1] as usize - 'a' as usize]);
+                    let to = Square::new(File::ALL[m[2] as usize - '1' as usize], Rank::ALL[m[3] as usize - 'a' as usize]);
+                    let is_promotion = {
+                        if m.len() == 5 { true } else { false }
+                    };
+                    let piece = pos.piece_on(from).unwrap();
+                    Move::new_normal(from, to, is_promotion, piece)
+                }
+            };
+            pos.do_move(m);
+        }
 
         return pos;
     }
@@ -279,8 +566,8 @@ fn main() {
                         }
                         "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string()
                     } else {
-                        if inputs.len() > 6 {
-                            for m in &inputs[6..] {
+                        if inputs.len() > 7 {
+                            for m in &inputs[7..] {
                                 moves.push(m);
                             }
                         }
