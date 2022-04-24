@@ -1,7 +1,6 @@
 use std::time::Instant;
 use std::collections::HashMap;
-use shogi::{Color, Move, PieceType, Position, Square};
-use shogi::bitboard::Factory as BBFactory;
+use yasai::{ Color, Move, MoveType, Square, Rank, File, Piece, PieceType, Position };
 
 mod search;
 
@@ -45,106 +44,47 @@ impl BakuretsuKomasuteTaroR {
         let reader = std::io::BufReader::new(eval_file);
         let eval: serde_json::Value = serde_json::from_reader(reader).expect("Can not Read json file.");
         // 盤面
-        for color in Color::iter() {
-            for sq in Square::iter() {
+        for color in Color::ALL {
+            for sq in Square::ALL {
                 let value = eval["pieces_dict"][sq.index().to_string()]["0"].as_i64().unwrap();
                 v.eval.pieces_in_board[color.index()][sq.index()][0] = value as i32;
-                for piece in PieceType::iter() {
-                    let mut piece_idx = {
-                        match piece.index() {
-                            0 => { 8 },
-                            1 => { 6 },
-                            2 => { 5 },
-                            3 => { 7 },
-                            4 => { 4 },
-                            5 => { 3 },
-                            6 => { 2 },
-                            7 => { 1 },
-                            8 => { 14 },
-                            9 => { 13 },
-                            10 => { 12 },
-                            11 => { 11 },
-                            12 => { 10 },
-                            13 => { 9 },
-                            _ => unreachable!(),
-                        }
-                    };
-                    if color == Color::White {
-                        piece_idx += 16;
+                for piece in PieceType::ALL {
+                    if color == Color::Black {
+                        let value = eval["pieces_dict"][sq.index().to_string()][(piece.index()+1).to_string()].as_i64().unwrap();
+                        v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+1] = value as i32;
+                    } else {
+                        let value = eval["pieces_dict"][sq.index().to_string()][(piece.index()+17).to_string()].as_i64().unwrap();
+                        v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+1] = value as i32;
                     }
-                    let value = eval["pieces_dict"][sq.index().to_string()][piece_idx.to_string()].as_i64().unwrap();
-                    v.eval.pieces_in_board[color.index()][sq.index()][piece.index()+1] = value as i32;
                 }
             }
         }
         // 持ち駒
-        for color in Color::iter() {
-            for piece in PieceType::iter() {
+        for color in Color::ALL {
+            for piece in PieceType::ALL_HAND {
+                let piece_idx = {
+                    if color == Color::Black { piece.index() } else { piece.index() + 7 }
+                };
                 match piece.index() {
-                    1 => {
-                        let piece_idx = {
-                            if color == Color::Black { 6 } else { 13 }
-                        };
-                        for i in 0..3 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    2 => {
-                        let piece_idx = {
-                            if color == Color::Black { 5 } else { 12 }
-                        };
-                        for i in 0..3 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    3 => {
-                        let piece_idx = {
-                            if color == Color::Black { 4 } else { 11 }
-                        };
-                        for i in 0..5 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    4 => {
-                        let piece_idx = {
-                            if color == Color::Black { 3 } else { 10 }
-                        };
-                        for i in 0..5 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    5 => {
-                        let piece_idx = {
-                            if color == Color::Black { 2 } else { 9 }
-                        };
-                        for i in 0..5 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    6 => {
-                        let piece_idx = {
-                            if color == Color::Black { 1 } else { 8 }
-                        };
-                        for i in 0..5 {
-                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
-                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
-                        }
-                    },
-                    7 => {
-                        let piece_idx = {
-                            if color == Color::Black { 0 } else { 7 }
-                        };
+                    0 => {
                         for i in 0..19 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
                             v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
                         }
                     },
-                    _ => (),
+                    1 | 2 | 3 | 4 => {
+                        for i in 0..5 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    5 | 6 => {
+                        for i in 0..3 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()][i.to_string()].as_i64().unwrap();
+                            v.eval.pieces_in_hand[color.index()][piece.index()][i] = value as i32;
+                        }
+                    },
+                    _ => unreachable!(),
                 }
             }
         }
@@ -192,10 +132,302 @@ impl BakuretsuKomasuteTaroR {
                 開始局面から現在までの手順
         */
 
-        let mut pos = Position::new();
-        pos.set_sfen(startpos).unwrap();
+        // sfenを分解
+        let startpos: Vec<String> = {
+            startpos.split_whitespace()
+                .map(|x| x.parse().unwrap())
+                .collect()
+        };
+        
+        // sfenの盤面部分のエンコード
+        let mut pieces: Vec<Option<Piece>> = Vec::new();
+        let mut promote = false;
+        for c in startpos[0].chars() {
+            match c {
+                'P' => {
+                    if promote {
+                        pieces.push(Some(Piece::BTO));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BFU));
+                    }
+                },
+                'L' => {
+                    if promote {
+                        pieces.push(Some(Piece::BNY));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BKY));
+                    }
+                },
+                'N' => {
+                    if promote {
+                        pieces.push(Some(Piece::BNK));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BKE));
+                    }
+                },
+                'S' => {
+                    if promote {
+                        pieces.push(Some(Piece::BNG));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BGI));
+                    }
+                },
+                'G' => {
+                    if promote {
+                        panic!("Gold is not promotable.");
+                    } else {
+                        pieces.push(Some(Piece::BKI));
+                    }
+                },
+                'B' => {
+                    if promote {
+                        pieces.push(Some(Piece::BUM));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BKA));
+                    }
+                },
+                'R' => {
+                    if promote {
+                        pieces.push(Some(Piece::BRY));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::BHI));
+                    }
+                },
+                'K' => {
+                    if promote {
+                        panic!("King is not promotable.");
+                    } else {
+                        pieces.push(Some(Piece::BOU));
+                    }
+                },
+                'p' => {
+                    if promote {
+                        pieces.push(Some(Piece::WTO));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WFU));
+                    }
+                },
+                'l' => {
+                    if promote {
+                        pieces.push(Some(Piece::WNY));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WKY));
+                    }
+                },
+                'n' => {
+                    if promote {
+                        pieces.push(Some(Piece::WNK));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WKE));
+                    }
+                },
+                's' => {
+                    if promote {
+                        pieces.push(Some(Piece::WNG));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WGI));
+                    }
+                },
+                'g' => {
+                    if promote {
+                        panic!("Gold is not promotable.");
+                    } else {
+                        pieces.push(Some(Piece::WKI));
+                    }
+                },
+                'b' => {
+                    if promote {
+                        pieces.push(Some(Piece::WUM));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WKA));
+                    }
+                },
+                'r' => {
+                    if promote {
+                        pieces.push(Some(Piece::WRY));
+                        promote = false;
+                    } else {
+                        pieces.push(Some(Piece::WHI));
+                    }
+                },
+                'k' => {
+                    if promote {
+                        panic!("King is not promotable.");
+                    } else {
+                        pieces.push(Some(Piece::WOU));
+                    }
+                },
+                '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                    for _ in 0..(c as i32 - '0' as i32) {
+                        pieces.push(None);
+                    }
+                },
+                '+' => promote = true,
+                '/' => (),
+                _ => unreachable!(),
+            }
+        }
+        assert_eq!(pieces.len(), 81, "Cannot encode sfen.");
+
+        // エンコードした局面をbitboardの形式に変換
+        let mut board: [Option<Piece>; 81] = [None; 81];
+        for i in 0..pieces.len() {
+            board[(8 - i % 9 ) * 9 + i / 9] = pieces[i];
+        }
+
+        // 手番をエンコード
+        let side_to_move = {
+            match &startpos[1][..] {
+                "b" => Color::Black,
+                "w" => Color::White,
+                _ => unreachable!(),
+            }
+        };
+
+        // 持ち駒をエンコード
+        let mut hand_nums = [[0; 7]; 2];
+        let mut side_to_move_idx = 0;
+        let mut piece_type_idx = 0;
+        let mut piece_nums = 1;
+        for c in startpos[2].chars() {
+            match c {
+                '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0' => {
+                    if piece_nums == 1 {
+                        piece_nums = c as u8 - '0' as u8;
+                    } else {
+                        piece_nums *= 10;
+                        piece_nums += c as u8 - '0' as u8;
+                    }
+                },
+                '-' => piece_nums = 0,
+                _ => {
+                    hand_nums[side_to_move_idx][piece_type_idx] = piece_nums;
+                    piece_nums = 1;
+                }
+            }
+            match c {
+                'P' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 0;
+                },
+                'L' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 1;
+                },
+                'N' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 2;
+                },
+                'S' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 3;
+                },
+                'G' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 4;
+                },
+                'B' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 5;
+                },
+                'R' => {
+                    side_to_move_idx = 0;
+                    piece_type_idx = 6;
+                },
+                'p' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 0;
+                },
+                'l' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 1;
+                },
+                'n' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 2;
+                },
+                's' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 3;
+                },
+                'g' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 4;
+                },
+                'b' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 5;
+                },
+                'r' => {
+                    side_to_move_idx = 1;
+                    piece_type_idx = 6;
+                },
+                '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0' | '-' => (),
+                _ => unreachable!(),
+            }
+        }
+        hand_nums[side_to_move_idx][piece_type_idx] = piece_nums;
+
+        // 手数のエンコード
+        let ply: u32 = startpos[3].parse().unwrap();
+
+        // bitboardに局面を反映
+        let mut pos = Position::new(board, hand_nums, side_to_move, ply);
+
+        // 指し手を進める
         for m in moves {
-            pos.make_move(Move::from_sfen(m).unwrap()).unwrap();
+            let m: Vec<char> = m.chars().collect();
+            let m = {
+                if m[1] == '*' {
+                    let to = Square::new(File::ALL[m[2] as usize - '1' as usize], Rank::ALL[m[3] as usize - 'a' as usize]);
+                    let piece = {
+                        if pos.side_to_move() == Color::Black {
+                            match m[0] {
+                                'P' => Piece::BFU,
+                                'L' => Piece::BKY,
+                                'N' => Piece::BKE,
+                                'S' => Piece::BGI,
+                                'G' => Piece::BKI,
+                                'B' => Piece::BKA,
+                                'R' => Piece::BHI,
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            match m[0] {
+                                'P' => Piece::WFU,
+                                'L' => Piece::WKY,
+                                'N' => Piece::WKE,
+                                'S' => Piece::WGI,
+                                'G' => Piece::WKI,
+                                'B' => Piece::WKA,
+                                'R' => Piece::WHI,
+                                _ => unreachable!(),
+                            }
+                        }
+                    };
+                    Move::new_drop(to, piece)
+                } else {
+                    let from = Square::new(File::ALL[m[0] as usize - '1' as usize], Rank::ALL[m[1] as usize - 'a' as usize]);
+                    let to = Square::new(File::ALL[m[2] as usize - '1' as usize], Rank::ALL[m[3] as usize - 'a' as usize]);
+                    let is_promotion = {
+                        if m.len() == 5 { true } else { false }
+                    };
+                    let piece = pos.piece_on(from).unwrap();
+                    Move::new_normal(from, to, is_promotion, piece)
+                }
+            };
+            pos.do_move(m);
         }
 
         return pos;
@@ -210,25 +442,22 @@ impl BakuretsuKomasuteTaroR {
             start_time: Instant::now(),
             max_time: max_time,
             num_searched: 0,
-            max_depth: 1.,
+            max_depth: 1,
             max_board_number: pos.ply(),
-            best_move_pv: "resign".to_string(),
+            best_move_pv: None,
             eval: eval,
             hash_table: search::HashTable {
                 pos: HashMap::new(),
             },
-            from_to_move_ordering: search::MoveOrdering {
-                pos: HashMap::new(),
-            },
-            brother_from_to_move_ordering: search::BrotherMoveOrdering {
+            brother_to_move_ordering: search::BrotherMoveOrdering {
                 pos: HashMap::new(),
             },
         };
 
         let mut best_move = "resign".to_string();
         for depth in 1..10 {
-            nega.max_depth = depth as f32;
-            let value = search::NegaAlpha::search(&mut nega, pos, depth as f32, -30000, 30000);
+            nega.max_depth = depth;
+            let value = search::NegaAlpha::search(&mut nega, pos, depth, -30000, 30000);
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
             let nps = if elapsed_time != 0 {
@@ -238,14 +467,70 @@ impl BakuretsuKomasuteTaroR {
             };
 
             if elapsed_time < nega.max_time {
+                best_move = {
+                    if let Some(ref m) = nega.best_move_pv {
+                        match m.move_type() {
+                            MoveType::Normal {
+                                from,
+                                to,
+                                is_promotion,
+                                piece: _,
+                            } => {
+                                let from = format!("{}{}", ('1' as u8 + from.index() as u8 / 9 as u8) as char, ('a' as u8 + from.index() as u8 % 9 as u8) as char);
+                                let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
+                                let is_promotion = {
+                                    if is_promotion { "+" } else { "" }
+                                };
+                                format!("{from}{to}{is_promotion}")
+                            },
+                            MoveType::Drop { to, piece } => {
+                                let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
+                                let piece = {
+                                    match piece {
+                                        Piece::BFU | Piece::WFU => {
+                                            "P*".to_string()
+                                        },
+                                        Piece::BKY | Piece::WKY => {
+                                            "L*".to_string()
+                                        },
+                                        Piece::BKE | Piece::WKE => {
+                                            "N*".to_string()
+                                        },
+                                        Piece::BGI | Piece::WGI => {
+                                            "S*".to_string()
+                                        },
+                                        Piece::BKI | Piece::WKI => {
+                                            "G*".to_string()
+                                        },
+                                        Piece::BKA | Piece::WKA => {
+                                            "B*".to_string()
+                                        },
+                                        Piece::BHI | Piece::WHI => {
+                                            "R*".to_string()
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                };
+                                format!("{piece}{to}")
+                            },
+
+                        }
+                    } else {
+                        "resign".to_string()
+                    }
+                };
                 print!("info depth {} seldepth {} time {} nodes {} ", depth, nega.max_board_number - pos.ply(), elapsed_time, nega.num_searched);
-                println!("score cp {} pv {} nps {}", value, nega.best_move_pv, nps);
-                best_move = nega.best_move_pv.clone();
+                println!("score cp {} pv {} nps {}", value, best_move, nps);
             } else {
                 break;
             }
-        }
 
+            // mateなら探索終了
+            if value.abs() > 29000 {
+                break;
+            }
+        }
+        
         return best_move;
     }
 
@@ -294,8 +579,7 @@ fn main() {
             pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
         }
     };
-    BBFactory::init();
-    let mut pos = Position::new();
+    let mut pos = Position::default();
 
     loop {
         // 入力の受け取り
@@ -331,8 +615,8 @@ fn main() {
                         }
                         "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string()
                     } else {
-                        if inputs.len() > 6 {
-                            for m in &inputs[6..] {
+                        if inputs.len() > 7 {
+                            for m in &inputs[7..] {
                                 moves.push(m);
                             }
                         }
