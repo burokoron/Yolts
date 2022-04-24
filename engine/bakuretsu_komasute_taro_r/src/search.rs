@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::Instant;
 use yasai::{Color, Move, PieceType, Position, Square};
 
@@ -6,21 +6,18 @@ use crate::Eval;
 
 
 pub struct HashTableValue {
-    depth: f32,
+    depth: u32,
     upper: i32,
     lower: i32,
+    best_move: Option<Move>,
 }
 
 pub struct HashTable {
     pub pos: HashMap<u64, HashTableValue>,
 }
 
-pub struct MoveOrdering {
-    pub pos: HashMap<u64, Vec<(Move, i32)>>,
-}
-
 pub struct BrotherMoveOrdering {
-    pub pos: HashMap<u16, HashMap<String, i32>>,
+    pub pos: HashMap<u32, Vec<i32>>,
 }
 
 
@@ -28,40 +25,15 @@ pub struct NegaAlpha {
     pub start_time: Instant,
     pub max_time: i32,
     pub num_searched: u64,
-    pub max_depth: f32,
+    pub max_depth: u32,
     pub max_board_number: u32,
     pub best_move_pv: Option<Move>,
     pub eval: Eval,
     pub hash_table: HashTable,
-    pub from_to_move_ordering: MoveOrdering,
-    pub brother_from_to_move_ordering: BrotherMoveOrdering,
+    pub brother_to_move_ordering: BrotherMoveOrdering,
 }
 
 impl NegaAlpha {
-    /*
-    pub fn sfen(pos: &mut Position) -> String {
-        let mut sfen = String::new();
-        for sq in Square::iter() {
-            let pc = pos.piece_at(sq);
-            if let Some(ref pc) = *pc {
-                sfen += &pc.color.index().to_string();
-                sfen += &pc.piece_type.index().to_string();
-            } else {
-                sfen += "0";
-            }
-        }
-        for piece_type in [PieceType::Rook, PieceType::Bishop, PieceType::Gold, PieceType::Silver, PieceType::Knight, PieceType::Lance, PieceType::Pawn] {
-            for color in Color::iter() {
-                sfen += &color.index().to_string();
-                sfen += &pos.hand(Piece { piece_type, color }).to_string();
-            }
-        }
-        sfen += &pos.side_to_move().index().to_string();
-
-        return sfen;
-    }
-    */
-
     fn evaluate(v: &NegaAlpha, pos: &mut Position) -> i32 {
         let mut value = 0;
         for sq in Square::ALL {
@@ -86,7 +58,7 @@ impl NegaAlpha {
         }
     }
 
-    pub fn search(v: &mut NegaAlpha, pos: &mut Position, mut depth: f32, mut alpha: i32, mut beta: i32) -> i32 {
+    pub fn search(v: &mut NegaAlpha, pos: &mut Position, depth: u32, mut alpha: i32, mut beta: i32) -> i32 {
         // 探索局面数
         v.num_searched += 1;
 
@@ -103,6 +75,7 @@ impl NegaAlpha {
         }
 
         // 置換表の確認
+        let mut best_move = None;
         let hash_table_value = v.hash_table.pos.get(&pos.key());
         if let Some(hash_table_value) = hash_table_value {
             if depth <= hash_table_value.depth {
@@ -117,19 +90,13 @@ impl NegaAlpha {
                 alpha = alpha.max(lower);
                 beta = beta.min(upper);
             }
+            best_move = hash_table_value.best_move;
         }
 
         // 探索深さ制限なら
-        if depth <= 0. {
+        if depth <= 0 {
             return NegaAlpha::evaluate(v, pos);
         }
-
-        // 王手ならちょっと延長
-        /*
-        if (pos.in_check(Color::Black) || pos.in_check(Color::White)) && v.max_depth - 1. > depth {
-            depth += 1.
-        }
-        */
 
         // Mate Distance Pruning
         let mating_value = -30000 + pos.ply() as i32;
@@ -153,91 +120,57 @@ impl NegaAlpha {
             return value
         }
 
-        let mut best_value = alpha;
-        let mut moves: Vec<Move> = Vec::new();
-        let mut ignore_moves: HashSet<String> = HashSet::new();
-        // 現局面における合法手の評価値が高かった順に調べる
-        let mut move_list: Vec<Move> = Vec::new();
-        let from_to_move_ordering = v.from_to_move_ordering.pos.get(&pos.key());
-        if let Some(from_to_move_ordering) = from_to_move_ordering {
-            let mut idx = (0..from_to_move_ordering.len()).collect::<Vec<_>>();
-            idx.sort_unstable_by(|&i, &j| (-from_to_move_ordering[i].1).cmp(&(-from_to_move_ordering[j].1)));
-            for i in idx {
-                move_list.push(from_to_move_ordering[i].0);
-                ignore_moves.insert(from_to_move_ordering[i].0.to_string());
-            }
-        }/* else {
-            // 兄弟局面の着手の評価値が高かった順に調べる
-            let brother_from_to_move_ordering = v.brother_from_to_move_ordering.pos.get(&pos.ply());
-            if let Some(brother_from_to_move_ordering) = brother_from_to_move_ordering {
-                let mut brother = Vec::new();
-                for (k, v) in brother_from_to_move_ordering {
-                    brother.push((k, *v));
-                }
-                let mut idx = (0..brother_from_to_move_ordering.len()).collect::<Vec<_>>();
-                idx.sort_unstable_by(|&i, &j| (-brother[i].1).cmp(&(-brother[j].1)));
-                for i in idx {
-                    move_list.push(Move::from_sfen(&brother[i].0).unwrap());
-                    ignore_moves.insert(brother[i].0.to_string());
-                }
-            }
-        }*/
-        let mut from_to_move_ordering = Vec::new();
-        //let mut brother_from_to_move_ordering: HashMap<String, i32> = HashMap::new();
-
-        for m in move_list {
-            pos.do_move(m);
-            let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
-            // ムーブオーダリング登録
-            /*
-            let brother = brother_from_to_move_ordering.entry(m.to_string()).or_insert(value);
-            *brother = (*brother as f32 * 0.9 + value as f32 * 0.1) as i32;
-            */
-            if best_value < value {
-                // ムーブオーダリング登録
-                from_to_move_ordering.push((m, value));
-                best_value = value;
-                if depth == v.max_depth {
-                    v.best_move_pv = Some(m);
-                }
-            }
-            pos.undo_move(m);
-            if best_value >= beta {
-                break;
-            }
-        }
-
-        // 全合法手展開
-        let move_list = pos.legal_moves();
-        if move_list.len() == 0 {
+        // 全合法手検索
+        let legal_moves = pos.legal_moves();
+        // 合法手なしなら
+        if legal_moves.len() == 0 {
             return -30000 + pos.ply() as i32;
         }
+
+        // ムーブオーダリング
+        let mut best_value = alpha;
+        let mut move_list: Vec<(Move, i32)> = Vec::new();
+        // ムーブオーダリング用の重み計算
+        let brother_from_to_move_ordering = v.brother_to_move_ordering.pos.get(&pos.ply());
+        for m in legal_moves {
+            let mut value = 0;
+            // 兄弟局面の着手の評価値
+            if let Some(brother_from_to_move_ordering) = brother_from_to_move_ordering {
+                let brother_from_to_value = brother_from_to_move_ordering[m.to().index()];
+                value = brother_from_to_value;
+            }
+            move_list.push((m, value));
+        }
+        move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
+
+        // 全合法手展開
+        let mut brother_from_to_move_ordering = v.brother_to_move_ordering.pos.entry(pos.ply()).or_insert(vec![0; 81]).clone();
         for m in move_list {
-            pos.do_move(m);
-            let value = - NegaAlpha::search(v, pos, depth - 1., -beta, -best_value);
-            // ムーブオーダリング登録
-            /*
-            let brother = brother_from_to_move_ordering.entry(m.to_string()).or_insert(value);
-            *brother = (*brother as f32 * 0.9 + value as f32 * 0.1) as i32;
-            */
+            pos.do_move(m.0);
+            let value = - NegaAlpha::search(v, pos, depth - 1, -beta, -best_value);
+            // ムーブオーダリング(兄弟局面)登録
+            let to = m.0.to().index();
+            brother_from_to_move_ordering[to] = (brother_from_to_move_ordering[to] as f32 * 0.9 + value as f32 * 0.1) as i32;
             if best_value < value {
-                // ムーブオーダリング登録
-                from_to_move_ordering.push((m, value));
                 best_value = value;
+                best_move = Some(m.0);
                 if depth == v.max_depth {
-                    v.best_move_pv = Some(m);
+                    v.best_move_pv = Some(m.0);
                 }
             }
-            pos.undo_move(m);
+            pos.undo_move(m.0);
             if best_value >= beta {
                 break;
             }
         }
-        v.from_to_move_ordering.pos.insert(pos.key(), from_to_move_ordering);
-        //v.brother_from_to_move_ordering.pos.insert(pos.ply(), brother_from_to_move_ordering);
+
+        // ムーブオーダリング用重みの更新
+        v.brother_to_move_ordering.pos.insert(pos.ply(), brother_from_to_move_ordering);
 
         // 置換表へ登録
-        let hash_table_value = v.hash_table.pos.entry(pos.key()).or_insert(HashTableValue { depth: -1., upper: 30000, lower: -30000 });
+        let hash_table_value = v.hash_table.pos.entry(pos.key()).or_insert(
+            HashTableValue { depth: 0, upper: 30000, lower: -30000, best_move: None }
+        );
         if depth > hash_table_value.depth {
             if best_value <= alpha {
                 hash_table_value.upper = best_value;
@@ -248,6 +181,7 @@ impl NegaAlpha {
                 hash_table_value.lower = best_value;
             }
             hash_table_value.depth = depth;
+            hash_table_value.best_move = best_move;
         }
         
         return best_value;

@@ -442,25 +442,22 @@ impl BakuretsuKomasuteTaroR {
             start_time: Instant::now(),
             max_time: max_time,
             num_searched: 0,
-            max_depth: 1.,
+            max_depth: 1,
             max_board_number: pos.ply(),
             best_move_pv: None,
             eval: eval,
             hash_table: search::HashTable {
                 pos: HashMap::new(),
             },
-            from_to_move_ordering: search::MoveOrdering {
-                pos: HashMap::new(),
-            },
-            brother_from_to_move_ordering: search::BrotherMoveOrdering {
+            brother_to_move_ordering: search::BrotherMoveOrdering {
                 pos: HashMap::new(),
             },
         };
 
         let mut best_move = "resign".to_string();
         for depth in 1..10 {
-            nega.max_depth = depth as f32;
-            let value = search::NegaAlpha::search(&mut nega, pos, depth as f32, -30000, 30000);
+            nega.max_depth = depth;
+            let value = search::NegaAlpha::search(&mut nega, pos, depth, -30000, 30000);
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
             let nps = if elapsed_time != 0 {
@@ -525,6 +522,11 @@ impl BakuretsuKomasuteTaroR {
                 print!("info depth {} seldepth {} time {} nodes {} ", depth, nega.max_board_number - pos.ply(), elapsed_time, nega.num_searched);
                 println!("score cp {} pv {} nps {}", value, best_move, nps);
             } else {
+                break;
+            }
+
+            // mateなら探索終了
+            if value.abs() > 29000 {
                 break;
             }
         }
