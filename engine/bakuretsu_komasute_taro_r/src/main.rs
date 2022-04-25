@@ -1,6 +1,6 @@
 use std::time::Instant;
 use std::collections::HashMap;
-use yasai::{ Color, Move, MoveType, Square, Rank, File, Piece, PieceType, Position };
+use yasai::{ Color, Move, Square, Rank, File, Piece, PieceType, Position };
 
 mod search;
 
@@ -469,58 +469,17 @@ impl BakuretsuKomasuteTaroR {
             if elapsed_time < nega.max_time {
                 best_move = {
                     if let Some(ref m) = nega.best_move_pv {
-                        match m.move_type() {
-                            MoveType::Normal {
-                                from,
-                                to,
-                                is_promotion,
-                                piece: _,
-                            } => {
-                                let from = format!("{}{}", ('1' as u8 + from.index() as u8 / 9 as u8) as char, ('a' as u8 + from.index() as u8 % 9 as u8) as char);
-                                let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
-                                let is_promotion = {
-                                    if is_promotion { "+" } else { "" }
-                                };
-                                format!("{from}{to}{is_promotion}")
-                            },
-                            MoveType::Drop { to, piece } => {
-                                let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
-                                let piece = {
-                                    match piece {
-                                        Piece::BFU | Piece::WFU => {
-                                            "P*".to_string()
-                                        },
-                                        Piece::BKY | Piece::WKY => {
-                                            "L*".to_string()
-                                        },
-                                        Piece::BKE | Piece::WKE => {
-                                            "N*".to_string()
-                                        },
-                                        Piece::BGI | Piece::WGI => {
-                                            "S*".to_string()
-                                        },
-                                        Piece::BKI | Piece::WKI => {
-                                            "G*".to_string()
-                                        },
-                                        Piece::BKA | Piece::WKA => {
-                                            "B*".to_string()
-                                        },
-                                        Piece::BHI | Piece::WHI => {
-                                            "R*".to_string()
-                                        }
-                                        _ => unreachable!(),
-                                    }
-                                };
-                                format!("{piece}{to}")
-                            },
-
-                        }
+                        search::move_to_sfen(*m)
                     } else {
                         "resign".to_string()
                     }
                 };
+                let mut pv = search::pv_to_sfen(&mut nega, pos);
+                if pv.len() == 0 {
+                    pv = "resign ".to_string();
+                }
                 print!("info depth {} seldepth {} time {} nodes {} ", depth, nega.max_board_number - pos.ply(), elapsed_time, nega.num_searched);
-                println!("score cp {} pv {} nps {}", value, best_move, nps);
+                println!("score cp {} pv {}nps {}", value, pv, nps);
             } else {
                 break;
             }

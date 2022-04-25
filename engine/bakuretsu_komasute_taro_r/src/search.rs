@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::time::Instant;
-use yasai::{Color, Move, PieceType, Position, Square};
+use yasai::{Color, Move, MoveType, Piece, PieceType, Position, Square};
 
 use crate::Eval;
 
@@ -19,7 +19,6 @@ pub struct HashTable {
 pub struct BrotherMoveOrdering {
     pub pos: HashMap<u32, Vec<i32>>,
 }
-
 
 pub struct NegaAlpha {
     pub start_time: Instant,
@@ -186,4 +185,89 @@ impl NegaAlpha {
         
         return best_value;
     }
+}
+
+pub fn move_to_sfen(m: Move) -> String {
+    match m.move_type() {
+        MoveType::Normal {
+            from,
+            to,
+            is_promotion,
+            piece: _,
+        } => {
+            let from = format!("{}{}", ('1' as u8 + from.index() as u8 / 9 as u8) as char, ('a' as u8 + from.index() as u8 % 9 as u8) as char);
+            let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
+            let is_promotion = {
+                if is_promotion { "+" } else { "" }
+            };
+            format!("{from}{to}{is_promotion}")
+        },
+        MoveType::Drop { to, piece } => {
+            let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
+            let piece = {
+                match piece {
+                    Piece::BFU | Piece::WFU => {
+                        "P*".to_string()
+                    },
+                    Piece::BKY | Piece::WKY => {
+                        "L*".to_string()
+                    },
+                    Piece::BKE | Piece::WKE => {
+                        "N*".to_string()
+                    },
+                    Piece::BGI | Piece::WGI => {
+                        "S*".to_string()
+                    },
+                    Piece::BKI | Piece::WKI => {
+                        "G*".to_string()
+                    },
+                    Piece::BKA | Piece::WKA => {
+                        "B*".to_string()
+                    },
+                    Piece::BHI | Piece::WHI => {
+                        "R*".to_string()
+                    }
+                    _ => unreachable!(),
+                }
+            };
+            format!("{piece}{to}")
+        },
+    }
+}
+
+pub fn pv_to_sfen(v: &mut NegaAlpha, pos: &mut Position) -> String {
+    let mut pv = "".to_string();
+    let mut moves = Vec::new();
+
+    loop {
+        let hash_table = v.hash_table.pos.get(&pos.key());
+        if let Some(hash_table_value) = hash_table {
+            let best_move = hash_table_value.best_move;
+            if let Some(best_move) = best_move {
+                if !pos.is_legal_move(best_move) {
+                    break;
+                }
+                pv += &move_to_sfen(best_move);
+                pv += " ";
+                pos.do_move(best_move);
+                moves.push(best_move);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    loop {
+        let m = moves.pop();
+        if let Some(m) = m {
+            pos.undo_move(m);
+        } else {
+            break;
+        }
+        
+    }
+
+    return pv;
 }
