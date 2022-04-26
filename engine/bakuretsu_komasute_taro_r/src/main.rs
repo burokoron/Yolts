@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{time::Instant, collections::HashSet};
 use std::collections::HashMap;
 use yasai::{ Color, Move, Square, Rank, File, Piece, PieceType, Position };
 
@@ -121,7 +121,7 @@ impl BakuretsuKomasuteTaroR {
 
     }
 
-    fn position(startpos: &str, moves: Vec<&str>) -> Position {
+    fn position(startpos: &str, moves: Vec<&str>) -> (Position, HashSet<u64>) {
         /*
         現局面の反映
 
@@ -383,7 +383,9 @@ impl BakuretsuKomasuteTaroR {
         let ply: u32 = startpos[3].parse().unwrap();
 
         // bitboardに局面を反映
+        let mut position_history = HashSet::new();
         let mut pos = Position::new(board, hand_nums, side_to_move, ply);
+        position_history.insert(pos.key());
 
         // 指し手を進める
         for m in moves {
@@ -428,12 +430,14 @@ impl BakuretsuKomasuteTaroR {
                 }
             };
             pos.do_move(m);
+            position_history.insert(pos.key());
         }
+        position_history.remove(&pos.key());
 
-        return pos;
+        return (pos, position_history);
     }
 
-    fn go(eval: Eval, pos: &mut Position, max_time: i32) -> String {
+    fn go(eval: Eval, pos: &mut Position, position_history: &mut HashSet<u64>, max_time: i32) -> String {
         /*
         思考し、最善手を返す
         */
@@ -457,7 +461,7 @@ impl BakuretsuKomasuteTaroR {
         let mut best_move = "resign".to_string();
         for depth in 1..10 {
             nega.max_depth = depth;
-            let value = search::NegaAlpha::search(&mut nega, pos, depth, -30000, 30000);
+            let value = search::NegaAlpha::search(&mut nega, pos, position_history, depth, -30000, 30000);
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
             let nps = if elapsed_time != 0 {
@@ -474,7 +478,7 @@ impl BakuretsuKomasuteTaroR {
                         "resign".to_string()
                     }
                 };
-                let mut pv = search::pv_to_sfen(&mut nega, pos);
+                let mut pv = search::pv_to_sfen(&mut nega, pos, position_history);
                 if pv.len() == 0 {
                     pv = "resign ".to_string();
                 }
@@ -539,6 +543,7 @@ fn main() {
         }
     };
     let mut pos = Position::default();
+    let mut position_history = HashSet::new();
 
     loop {
         // 入力の受け取り
@@ -582,7 +587,7 @@ fn main() {
                         format!("{} {} {} {}", inputs[2], inputs[3], inputs[4], inputs[5])
                     }
                 };
-                pos = BakuretsuKomasuteTaroR::position(&startpos, moves);
+                (pos, position_history) = BakuretsuKomasuteTaroR::position(&startpos, moves);
             },
             "go" => {  // 思考して指し手を返答
                 // 120手で終局想定で時間制御
@@ -622,7 +627,7 @@ fn main() {
                     remain_move_number = 1
                 }
                 max_time = std::cmp::max(max_time / remain_move_number, min_time);
-                let m = BakuretsuKomasuteTaroR::go(engine.eval.clone(), &mut pos, max_time);
+                let m = BakuretsuKomasuteTaroR::go(engine.eval.clone(), &mut pos, &mut position_history, max_time);
                 println!("bestmove {}", m);
             }
             "stop" => {  // 思考停止コマンド

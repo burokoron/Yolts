@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use yasai::{Color, Move, MoveType, Piece, PieceType, Position, Square};
 
@@ -57,7 +57,7 @@ impl NegaAlpha {
         }
     }
 
-    pub fn search(v: &mut NegaAlpha, pos: &mut Position, depth: u32, mut alpha: i32, mut beta: i32) -> i32 {
+    pub fn search(v: &mut NegaAlpha, pos: &mut Position, position_history: &mut HashSet<u64>, depth: u32, mut alpha: i32, mut beta: i32) -> i32 {
         // 探索局面数
         v.num_searched += 1;
 
@@ -71,6 +71,15 @@ impl NegaAlpha {
         let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
         if elapsed_time >= v.max_time {
             return alpha;
+        }
+
+        // 同一局面の確認
+        if position_history.contains(&pos.key()) {
+            if pos.in_check() {
+                return 30000 - pos.ply() as i32;
+            } else {
+                return 0;
+            }
         }
 
         // 置換表の確認
@@ -143,10 +152,11 @@ impl NegaAlpha {
         move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
 
         // 全合法手展開
+        position_history.insert(pos.key());
         let mut brother_from_to_move_ordering = v.brother_to_move_ordering.pos.entry(pos.ply()).or_insert(vec![0; 81]).clone();
         for m in move_list {
             pos.do_move(m.0);
-            let value = - NegaAlpha::search(v, pos, depth - 1, -beta, -best_value);
+            let value = - NegaAlpha::search(v, pos, position_history, depth - 1, -beta, -best_value);
             // ムーブオーダリング(兄弟局面)登録
             let to = m.0.to().index();
             brother_from_to_move_ordering[to] = (brother_from_to_move_ordering[to] as f32 * 0.9 + value as f32 * 0.1) as i32;
@@ -162,6 +172,7 @@ impl NegaAlpha {
                 break;
             }
         }
+        position_history.remove(&pos.key());
 
         // ムーブオーダリング用重みの更新
         v.brother_to_move_ordering.pos.insert(pos.ply(), brother_from_to_move_ordering);
@@ -235,11 +246,14 @@ pub fn move_to_sfen(m: Move) -> String {
     }
 }
 
-pub fn pv_to_sfen(v: &mut NegaAlpha, pos: &mut Position) -> String {
+pub fn pv_to_sfen(v: &mut NegaAlpha, pos: &mut Position, position_history: &mut HashSet<u64>) -> String {
     let mut pv = "".to_string();
     let mut moves = Vec::new();
 
     loop {
+        if position_history.contains(&pos.key()) {
+            break;
+        }
         let hash_table = v.hash_table.pos.get(&pos.key());
         if let Some(hash_table_value) = hash_table {
             let best_move = hash_table_value.best_move;
@@ -249,6 +263,7 @@ pub fn pv_to_sfen(v: &mut NegaAlpha, pos: &mut Position) -> String {
                 }
                 pv += &move_to_sfen(best_move);
                 pv += " ";
+                position_history.insert(pos.key());
                 pos.do_move(best_move);
                 moves.push(best_move);
             } else {
@@ -263,6 +278,7 @@ pub fn pv_to_sfen(v: &mut NegaAlpha, pos: &mut Position) -> String {
         let m = moves.pop();
         if let Some(m) = m {
             pos.undo_move(m);
+            position_history.remove(&pos.key());
         } else {
             break;
         }
