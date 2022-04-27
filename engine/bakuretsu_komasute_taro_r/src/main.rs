@@ -1,3 +1,6 @@
+use encoding::{Encoding, EncoderTrap};
+use encoding::all::WINDOWS_31J;
+use std::io::{stdout, Write};
 use std::{time::Instant, collections::HashSet};
 use std::collections::HashMap;
 use yasai::{ Color, Move, Square, Rank, File, Piece, PieceType, Position };
@@ -27,8 +30,11 @@ impl BakuretsuKomasuteTaroR {
             v: &BakuretsuKomasuteTaroR
                 エンジン実行中に一時保存するデータ群
         */
-
-        println!("id name {} version {}", v.engine_name, env!("CARGO_PKG_VERSION"));
+        print!("id name ");
+        let mut out = stdout();
+        let bytes = WINDOWS_31J.encode(&v.engine_name, EncoderTrap::Ignore).unwrap();
+        out.write_all(&bytes[..]).unwrap();
+        println!(" version {}", env!("CARGO_PKG_VERSION"));
         println!("id author {}", v.author);
         println!("option name EvalFile type string default {}", v.eval_file_path);
         println!("usiok");

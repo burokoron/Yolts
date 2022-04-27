@@ -11,3 +11,4 @@ lto = true
 [dependencies]
 yasai = { git = "https://github.com/sugyan/yasai", tag = "0.1.3" }
 serde_json = "1.0.59"
+encoding = "0.2.33"
