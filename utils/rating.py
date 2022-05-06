@@ -7,10 +7,10 @@ import typing
 
 
 def update(
-        my_elo_rating: float,
-        fixed_rating_players: typing.Dict[str, typing.List[float]],
-        iteration: int
-        ) -> typing.Tuple[float, float]:
+    my_elo_rating: float,
+    fixed_rating_players: typing.Dict[str, typing.List[float]],
+    iteration: int,
+) -> typing.Tuple[float, float]:
     min_rating = my_elo_rating
     max_reting = my_elo_rating
     for _ in range(iteration):
@@ -42,12 +42,12 @@ if __name__ == "__main__":
     """
 
     # QRLのついた基準ソフトとレーティング計算したソフトの設定
-    player = {
+    player: typing.Dict[str, typing.Dict[str, typing.Any]] = {
         "RandamKun V 1.0.0": {
             "opponent": {
                 "十六式いろは SDT4": 0.528,
                 "GSE 0.1.6": 0.014,
-                "LesserKai": 0.,
+                "LesserKai": 0.0,
             },
             "rating": 112,
         },
@@ -70,7 +70,7 @@ if __name__ == "__main__":
                 "十六式いろは SDT4": 0.997,
                 "爆裂駒捨太郎 V 1.0.0": 0.942,
                 "GSE 0.1.6": 0.012,
-                "LesserKai": 0.,
+                "LesserKai": 0.0,
                 "Bonanza 6.0 D1": 0,
             },
             "rating": 425,
@@ -130,11 +130,29 @@ if __name__ == "__main__":
                 "爆裂駒捨太郎 V 2.0.0": 0.998,
                 "爆裂駒捨太郎 V 2.1.0": 0.972,
                 "爆裂駒捨太郎 V 2.2.0": 0.86,
-                "LesserKai": 0.4,
+                "LesserKai": 0.04,
                 "Bonanza 6.0 D1": 0.012,
                 "Bonanza 6.0 D2": 0.002,
             },
-            "rating": 747,
+            "rating": 701,
+        },
+        "爆裂駒捨太郎R V 1.0.0": {
+            "opponent": {
+                "RandamKun V 1.0.0": 1.0,
+                "十六式いろは SDT4": 1.0,
+                "爆裂駒捨太郎 V 1.0.0": 1.0,
+                "爆裂駒捨太郎 V 1.1.0": 1.0,
+                "GSE 0.1.6": 0.216,
+                "爆裂駒捨太郎 V 2.0.0": 1.0,
+                "爆裂駒捨太郎 V 2.1.0": 0.989,
+                "爆裂駒捨太郎 V 2.2.0": 0.89,
+                "爆裂駒捨太郎 V 2.3.0": 0.67,
+                "LesserKai": 0.116,
+                "Bonanza 6.0 D1": 0.023,
+                "Bonanza 6.0 D2": 0.015,
+                "技巧2 D1": 0.005,
+            },
+            "rating": 744,
         },
         "LesserKai": {
             "opponent": {},
@@ -148,12 +166,18 @@ if __name__ == "__main__":
             "opponent": {},
             "rating": 1325,
         },
+        "技巧2 D1": {
+            "opponent": {},
+            "rating": 1544,
+        },
     }
 
     # イテレーション
     iteration = 1000000
 
     for target in player.keys():
+        if player[target]["rating"] != 0:
+            continue
         # 基準エンジンのレーティングとそれに対する勝率
         fixed_rating_players: typing.Dict[str, typing.List[float]] = {
             "elo_rating": [],
@@ -161,7 +185,9 @@ if __name__ == "__main__":
         }
         for opponent in player[target]["opponent"].keys():
             fixed_rating_players["elo_rating"].append(player[opponent]["rating"])
-            fixed_rating_players["win_rate"].append(player[target]["opponent"][opponent])
+            fixed_rating_players["win_rate"].append(
+                player[target]["opponent"][opponent]
+            )
         if len(fixed_rating_players["elo_rating"]) == 0:
             continue
         my_elo_rating = min(fixed_rating_players["elo_rating"])
@@ -173,7 +199,7 @@ if __name__ == "__main__":
             a, b = update(
                 my_elo_rating=my_elo_rating,
                 fixed_rating_players=fixed_rating_players,
-                iteration=iteration
+                iteration=iteration,
             )
             c = abs(my_elo_rating - (a + b) / 2)
             my_elo_rating = (a + b) / 2

@@ -3,8 +3,8 @@
 """
 
 import argparse
-import os
 import json
+import os
 import typing
 
 import cshogi
