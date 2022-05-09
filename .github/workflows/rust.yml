@@ -31,12 +31,12 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: fmt
-        args: --all -- --check
+        args: --all --manifest-path bakuretsu_komasute_taro_r/Cargo.toml -- --check
     - name: Run clippy
       uses: actions-rs/cargo@v1
       with:
         command: clippy
-        args: -- -D warnings
+        args: --manifest-path bakuretsu_komasute_taro_r/Cargo.toml -- -D warnings
     - name: Run tests
       uses: actions-rs/cargo@v1
       with:
