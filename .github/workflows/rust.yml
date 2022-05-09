@@ -38,7 +38,7 @@ jobs:
         command: clippy
         args: -- -D warnings
     - name: Run tests
-    - uses: actions-rs/cargo@v1
+      uses: actions-rs/cargo@v1
       with:
         command: test
         args: --release --all-features
