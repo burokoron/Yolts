@@ -4,7 +4,6 @@ use yasai::{Color, Move, MoveType, Piece, PieceType, Position, Square};
 
 use crate::Eval;
 
-
 pub struct HashTableValue {
     depth: u32,
     upper: i32,
@@ -38,7 +37,8 @@ impl NegaAlpha {
         for sq in Square::ALL {
             let pc = pos.piece_on(sq);
             if let Some(ref pc) = pc {
-                value += v.eval.pieces_in_board[pc.color().index()][sq.index()][pc.piece_type().index()+1];
+                value += v.eval.pieces_in_board[pc.color().index()][sq.index()]
+                    [pc.piece_type().index() + 1];
             } else {
                 value += v.eval.pieces_in_board[0][sq.index()][0];
             }
@@ -46,18 +46,26 @@ impl NegaAlpha {
         for color in Color::ALL {
             let hand = pos.hand(color);
             for piece_type in PieceType::ALL_HAND {
-                value += v.eval.pieces_in_hand[color.index()][piece_type.index()][hand.num(piece_type) as usize];
+                value += v.eval.pieces_in_hand[color.index()][piece_type.index()]
+                    [hand.num(piece_type) as usize];
             }
         }
 
         if pos.side_to_move() == Color::Black {
-            return value;
+            value
         } else {
-            return -value;
+            -value
         }
     }
 
-    pub fn search(v: &mut NegaAlpha, pos: &mut Position, position_history: &mut HashSet<u64>, depth: u32, mut alpha: i32, mut beta: i32) -> i32 {
+    pub fn search(
+        v: &mut NegaAlpha,
+        pos: &mut Position,
+        position_history: &mut HashSet<u64>,
+        depth: u32,
+        mut alpha: i32,
+        mut beta: i32,
+    ) -> i32 {
         // 探索局面数
         v.num_searched += 1;
 
@@ -93,7 +101,7 @@ impl NegaAlpha {
                     return lower;
                 }
                 if upper <= alpha || upper == lower {
-                    return  upper;
+                    return upper;
                 }
                 alpha = alpha.max(lower);
                 beta = beta.min(upper);
@@ -102,7 +110,7 @@ impl NegaAlpha {
         }
 
         // 探索深さ制限なら
-        if depth <= 0 {
+        if depth == 0 {
             return NegaAlpha::evaluate(v, pos);
         }
 
@@ -111,27 +119,27 @@ impl NegaAlpha {
         if mating_value > alpha {
             alpha = mating_value;
             if beta <= mating_value {
-                return mating_value
+                return mating_value;
             }
         }
         let mating_value = 30000 - pos.ply() as i32;
         if mating_value < beta {
             beta = mating_value;
             if alpha >= mating_value {
-                return mating_value
+                return mating_value;
             }
         }
 
         // Futility Pruning
         let value = NegaAlpha::evaluate(v, pos);
         if value <= alpha - 400 * depth as i32 {
-            return value
+            return value;
         }
 
         // 全合法手検索
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
-        if legal_moves.len() == 0 {
+        if legal_moves.is_empty() {
             return -30000 + pos.ply() as i32;
         }
 
@@ -153,13 +161,19 @@ impl NegaAlpha {
 
         // 全合法手展開
         position_history.insert(pos.key());
-        let mut brother_from_to_move_ordering = v.brother_to_move_ordering.pos.entry(pos.ply()).or_insert(vec![0; 81]).clone();
+        let mut brother_from_to_move_ordering = v
+            .brother_to_move_ordering
+            .pos
+            .entry(pos.ply())
+            .or_insert_with(|| vec![0; 81])
+            .clone();
         for m in move_list {
             pos.do_move(m.0);
-            let value = - NegaAlpha::search(v, pos, position_history, depth - 1, -beta, -best_value);
+            let value = -NegaAlpha::search(v, pos, position_history, depth - 1, -beta, -best_value);
             // ムーブオーダリング(兄弟局面)登録
             let to = m.0.to().index();
-            brother_from_to_move_ordering[to] = (brother_from_to_move_ordering[to] as f32 * 0.9 + value as f32 * 0.1) as i32;
+            brother_from_to_move_ordering[to] =
+                (brother_from_to_move_ordering[to] as f32 * 0.9 + value as f32 * 0.1) as i32;
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
@@ -175,12 +189,17 @@ impl NegaAlpha {
         position_history.remove(&pos.key());
 
         // ムーブオーダリング用重みの更新
-        v.brother_to_move_ordering.pos.insert(pos.ply(), brother_from_to_move_ordering);
+        v.brother_to_move_ordering
+            .pos
+            .insert(pos.ply(), brother_from_to_move_ordering);
 
         // 置換表へ登録
-        let hash_table_value = v.hash_table.pos.entry(pos.key()).or_insert(
-            HashTableValue { depth: 0, upper: 30000, lower: -30000, best_move: None }
-        );
+        let hash_table_value = v.hash_table.pos.entry(pos.key()).or_insert(HashTableValue {
+            depth: 0,
+            upper: 30000,
+            lower: -30000,
+            best_move: None,
+        });
         if depth > hash_table_value.depth {
             if best_value <= alpha {
                 hash_table_value.upper = best_value;
@@ -193,8 +212,8 @@ impl NegaAlpha {
             hash_table_value.depth = depth;
             hash_table_value.best_move = best_move;
         }
-        
-        return best_value;
+
+        best_value
     }
 }
 
@@ -206,47 +225,53 @@ pub fn move_to_sfen(m: Move) -> String {
             is_promotion,
             piece: _,
         } => {
-            let from = format!("{}{}", ('1' as u8 + from.index() as u8 / 9 as u8) as char, ('a' as u8 + from.index() as u8 % 9 as u8) as char);
-            let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
+            let from = format!(
+                "{}{}",
+                (b'1' + from.index() as u8 / 9) as char,
+                (b'a' + from.index() as u8 % 9) as char
+            );
+            let to = format!(
+                "{}{}",
+                (b'1' + to.index() as u8 / 9) as char,
+                (b'a' + to.index() as u8 % 9) as char
+            );
             let is_promotion = {
-                if is_promotion { "+" } else { "" }
+                if is_promotion {
+                    "+"
+                } else {
+                    ""
+                }
             };
             format!("{from}{to}{is_promotion}")
-        },
+        }
         MoveType::Drop { to, piece } => {
-            let to = format!("{}{}", ('1' as u8 + to.index() as u8 / 9 as u8) as char, ('a' as u8 + to.index() as u8 % 9 as u8) as char);
+            let to = format!(
+                "{}{}",
+                (b'1' + to.index() as u8 / 9) as char,
+                (b'a' + to.index() as u8 % 9) as char
+            );
             let piece = {
                 match piece {
-                    Piece::BFU | Piece::WFU => {
-                        "P*".to_string()
-                    },
-                    Piece::BKY | Piece::WKY => {
-                        "L*".to_string()
-                    },
-                    Piece::BKE | Piece::WKE => {
-                        "N*".to_string()
-                    },
-                    Piece::BGI | Piece::WGI => {
-                        "S*".to_string()
-                    },
-                    Piece::BKI | Piece::WKI => {
-                        "G*".to_string()
-                    },
-                    Piece::BKA | Piece::WKA => {
-                        "B*".to_string()
-                    },
-                    Piece::BHI | Piece::WHI => {
-                        "R*".to_string()
-                    }
+                    Piece::BFU | Piece::WFU => "P*".to_string(),
+                    Piece::BKY | Piece::WKY => "L*".to_string(),
+                    Piece::BKE | Piece::WKE => "N*".to_string(),
+                    Piece::BGI | Piece::WGI => "S*".to_string(),
+                    Piece::BKI | Piece::WKI => "G*".to_string(),
+                    Piece::BKA | Piece::WKA => "B*".to_string(),
+                    Piece::BHI | Piece::WHI => "R*".to_string(),
                     _ => unreachable!(),
                 }
             };
             format!("{piece}{to}")
-        },
+        }
     }
 }
 
-pub fn pv_to_sfen(v: &mut NegaAlpha, pos: &mut Position, position_history: &mut HashSet<u64>) -> String {
+pub fn pv_to_sfen(
+    v: &mut NegaAlpha,
+    pos: &mut Position,
+    position_history: &mut HashSet<u64>,
+) -> String {
     let mut pv = "".to_string();
     let mut moves = Vec::new();
 
@@ -282,8 +307,7 @@ pub fn pv_to_sfen(v: &mut NegaAlpha, pos: &mut Position, position_history: &mut 
         } else {
             break;
         }
-        
     }
 
-    return pv;
+    pv
 }
