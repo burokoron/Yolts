@@ -52,9 +52,9 @@ impl NegaAlpha {
         }
 
         if pos.side_to_move() == Color::Black {
-            return value;
+            value
         } else {
-            return -value;
+            -value
         }
     }
 
@@ -62,7 +62,7 @@ impl NegaAlpha {
         v: &mut NegaAlpha,
         pos: &mut Position,
         position_history: &mut HashSet<u64>,
-        mut depth: u32,
+        depth: u32,
         mut alpha: i32,
         mut beta: i32,
     ) -> i32 {
@@ -110,7 +110,7 @@ impl NegaAlpha {
         }
 
         // 探索深さ制限なら
-        if depth <= 0 {
+        if depth == 0 {
             return NegaAlpha::evaluate(v, pos);
         }
 
@@ -139,7 +139,7 @@ impl NegaAlpha {
         // 全合法手検索
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
-        if legal_moves.len() == 0 {
+        if legal_moves.is_empty() {
             return -30000 + pos.ply() as i32;
         }
 
@@ -165,7 +165,7 @@ impl NegaAlpha {
             .brother_to_move_ordering
             .pos
             .entry(pos.ply())
-            .or_insert(vec![0; 81])
+            .or_insert_with(|| vec![0; 81])
             .clone();
         for m in move_list {
             pos.do_move(m.0);
@@ -213,7 +213,7 @@ impl NegaAlpha {
             hash_table_value.best_move = best_move;
         }
 
-        return best_value;
+        best_value
     }
 }
 
@@ -227,13 +227,13 @@ pub fn move_to_sfen(m: Move) -> String {
         } => {
             let from = format!(
                 "{}{}",
-                ('1' as u8 + from.index() as u8 / 9 as u8) as char,
-                ('a' as u8 + from.index() as u8 % 9 as u8) as char
+                (b'1' + from.index() as u8 / 9) as char,
+                (b'a' + from.index() as u8 % 9) as char
             );
             let to = format!(
                 "{}{}",
-                ('1' as u8 + to.index() as u8 / 9 as u8) as char,
-                ('a' as u8 + to.index() as u8 % 9 as u8) as char
+                (b'1' + to.index() as u8 / 9) as char,
+                (b'a' + to.index() as u8 % 9) as char
             );
             let is_promotion = {
                 if is_promotion {
@@ -247,8 +247,8 @@ pub fn move_to_sfen(m: Move) -> String {
         MoveType::Drop { to, piece } => {
             let to = format!(
                 "{}{}",
-                ('1' as u8 + to.index() as u8 / 9 as u8) as char,
-                ('a' as u8 + to.index() as u8 % 9 as u8) as char
+                (b'1' + to.index() as u8 / 9) as char,
+                (b'a' + to.index() as u8 % 9) as char
             );
             let piece = {
                 match piece {
@@ -309,5 +309,5 @@ pub fn pv_to_sfen(
         }
     }
 
-    return pv;
+    pv
 }
