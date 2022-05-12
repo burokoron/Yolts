@@ -499,8 +499,8 @@ impl BakuretsuTenseiTaro {
             hash_table: search::HashTable {
                 pos: HashMap::new(),
             },
-            brother_to_move_ordering: search::BrotherMoveOrdering {
-                pos: HashMap::new(),
+            move_ordering: search::MoveOrdering {
+                piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
             },
         };
 

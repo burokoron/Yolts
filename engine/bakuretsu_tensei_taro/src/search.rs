@@ -15,8 +15,8 @@ pub struct HashTable {
     pub pos: HashMap<u64, HashTableValue>,
 }
 
-pub struct BrotherMoveOrdering {
-    pub pos: HashMap<u32, Vec<i32>>,
+pub struct MoveOrdering {
+    pub piece_to_history: Vec<Vec<Vec<i64>>>,
 }
 
 pub struct NegaAlpha {
@@ -28,7 +28,7 @@ pub struct NegaAlpha {
     pub best_move_pv: Option<Move>,
     pub eval: Eval,
     pub hash_table: HashTable,
-    pub brother_to_move_ordering: BrotherMoveOrdering,
+    pub move_ordering: MoveOrdering,
 }
 
 impl NegaAlpha {
@@ -145,35 +145,23 @@ impl NegaAlpha {
 
         // ムーブオーダリング
         let mut best_value = alpha;
-        let mut move_list: Vec<(Move, i32)> = Vec::new();
+        let mut move_list: Vec<(Move, i64)> = Vec::new();
         // ムーブオーダリング用の重み計算
-        let brother_from_to_move_ordering = v.brother_to_move_ordering.pos.get(&pos.ply());
         for m in legal_moves {
-            let mut value = 0;
-            // 兄弟局面の着手の評価値
-            if let Some(brother_from_to_move_ordering) = brother_from_to_move_ordering {
-                let brother_from_to_value = brother_from_to_move_ordering[m.to().index()];
-                value = brother_from_to_value;
-            }
+            // Piece To History
+            let turn = pos.side_to_move().index();
+            let piece = m.piece().piece_type().index();
+            let to = m.to().index();
+            let value = v.move_ordering.piece_to_history[turn][piece][to];
             move_list.push((m, value));
         }
         move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
 
         // 全合法手展開
         position_history.insert(pos.key());
-        let mut brother_from_to_move_ordering = v
-            .brother_to_move_ordering
-            .pos
-            .entry(pos.ply())
-            .or_insert_with(|| vec![0; 81])
-            .clone();
         for m in move_list {
             pos.do_move(m.0);
             let value = -NegaAlpha::search(v, pos, position_history, depth - 1, -beta, -best_value);
-            // ムーブオーダリング(兄弟局面)登録
-            let to = m.0.to().index();
-            brother_from_to_move_ordering[to] =
-                (brother_from_to_move_ordering[to] as f32 * 0.9 + value as f32 * 0.1) as i32;
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
@@ -183,15 +171,15 @@ impl NegaAlpha {
             }
             pos.undo_move(m.0);
             if best_value >= beta {
+                // Piece To History
+                let turn = pos.side_to_move().index();
+                let piece = m.0.piece().piece_type().index();
+                let to = m.0.to().index();
+                v.move_ordering.piece_to_history[turn][piece][to] += depth as i64 * depth as i64;
                 break;
             }
         }
         position_history.remove(&pos.key());
-
-        // ムーブオーダリング用重みの更新
-        v.brother_to_move_ordering
-            .pos
-            .insert(pos.ply(), brother_from_to_move_ordering);
 
         // 置換表へ登録
         let hash_table_value = v.hash_table.pos.entry(pos.key()).or_insert(HashTableValue {
