@@ -146,6 +146,12 @@ impl NegaAlpha {
         // ムーブオーダリング
         let mut best_value = alpha;
         let mut move_list: Vec<(Move, i64)> = Vec::new();
+        // 置換表にある手は最初に調べる
+        if let Some(best_move) = best_move {
+            if pos.is_legal_move(best_move) {
+                move_list.push((best_move, 100000));
+            }
+        }
         // ムーブオーダリング用の重み計算
         for m in legal_moves {
             // Piece To History
