@@ -2,7 +2,7 @@
 
 詰将棋に意味はあるのか、はたまた無いのか、永遠に終わらない不毛な議論に終止符を打つ崇高なプロジェクト。  
 ~~その名もYolts (You only look Tsume-Shogi) プロジェクト。~~  
-その名もYolts (You **not** only look look Tsume-Shogi) プロジェクト。
+その名もYolts (You **not** only look Tsume-Shogi) プロジェクト。
 
 ## 方針
 
