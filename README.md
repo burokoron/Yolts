@@ -1,11 +1,13 @@
 # Yolts
 
 詰将棋に意味はあるのか、はたまた無いのか、永遠に終わらない不毛な議論に終止符を打つ崇高なプロジェクト。  
-その名もYolts (You only look Tsume-Shogi) プロジェクト。
+~~その名もYolts (You only look Tsume-Shogi) プロジェクト。~~  
+その名もYolts (You **not** only look look Tsume-Shogi) プロジェクト。
 
 ## 方針
 
-- やねうらお氏公開の[詰将棋問題集500万問](https://yaneuraou.yaneu.com/2020/12/25/christmas-present/)を用いて将棋エンジンを開発する
+- ~~やねうらお氏公開の[詰将棋問題集500万問](https://yaneuraou.yaneu.com/2020/12/25/christmas-present/)を用いて将棋エンジンを開発する~~
+- 真に入玉を目指す、だいたい入玉宣言で勝つエンジンを開発する
 - 場合によってはその限りではない
 
 ## 使い方
@@ -33,6 +35,10 @@
 
 ## 更新履歴
 
+- 2022/06/05
+  - 爆裂転生太郎 V 1.0.0を追加
+    - ムーブオーダリングを手番、駒種、着手位置をキーにしたHistory Heuristicに変更
+    - ムーブオーダリングで前回の最善手順から探索するように変更
 - 2022/05/07
   - 爆裂駒捨太郎R V 1.0.0にアップデート
     - 局面管理に使用していたshogi-rsをyasaiに変更、NPSが約30倍に
