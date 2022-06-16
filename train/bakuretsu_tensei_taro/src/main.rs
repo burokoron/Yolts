@@ -489,6 +489,7 @@ impl BakuretsuTenseiTaro {
         */
 
         let mut nega = search::NegaAlpha {
+            my_turn: pos.side_to_move(),
             start_time: Instant::now(),
             max_time,
             num_searched: 0,

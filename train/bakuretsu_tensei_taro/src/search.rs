@@ -20,6 +20,7 @@ pub struct MoveOrdering {
 }
 
 pub struct NegaAlpha {
+    pub my_turn: Color,
     pub start_time: Instant,
     pub max_time: i32,
     pub num_searched: u64,
@@ -146,7 +147,11 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            return 30000 - pos.ply() as i32;
+            if pos.side_to_move() == v.my_turn {
+                return -30000 + pos.ply() as i32;
+            } else {
+                return 30000 - pos.ply() as i32;
+            }
         }
 
         // ムーブオーダリング
