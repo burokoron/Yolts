@@ -18,6 +18,7 @@ struct BakuretsuTenseiTaro {
     author: String,
     eval_file_path: String,
     eval: Eval,
+    depth_limit: u32,
 }
 
 impl BakuretsuTenseiTaro {
@@ -40,6 +41,10 @@ impl BakuretsuTenseiTaro {
         println!(
             "option name EvalFile type string default {}",
             v.eval_file_path
+        );
+        println!(
+            "option name DepthLimit type spin default {} min 0 max 1000",
+            v.depth_limit
         );
         println!("usiok");
     }
@@ -143,8 +148,10 @@ impl BakuretsuTenseiTaro {
                 設定する値
         */
 
-        if name == "EvalFile" {
-            v.eval_file_path = value;
+        match &name[..] {
+            "EvalFile" => v.eval_file_path = value,
+            "DepthLimit" => v.depth_limit = value.parse().unwrap(),
+            _ => (),
         }
     }
 
@@ -479,7 +486,7 @@ impl BakuretsuTenseiTaro {
     }
 
     fn go(
-        eval: Eval,
+        v: &mut BakuretsuTenseiTaro,
         pos: &mut Position,
         position_history: &mut HashSet<u64>,
         max_time: i32,
@@ -495,7 +502,7 @@ impl BakuretsuTenseiTaro {
             max_depth: 1,
             max_board_number: pos.ply(),
             best_move_pv: None,
-            eval,
+            eval: v.eval.clone(),
             hash_table: search::HashTable {
                 pos: HashMap::new(),
             },
@@ -505,7 +512,7 @@ impl BakuretsuTenseiTaro {
         };
 
         let mut best_move = "resign".to_string();
-        for depth in 1..10 {
+        for depth in 1..=v.depth_limit {
             nega.max_depth = depth;
             let value =
                 search::NegaAlpha::search(&mut nega, pos, position_history, depth, -30000, 30000);
@@ -594,6 +601,7 @@ fn main() {
             pieces_in_board: vec![vec![vec![0; 31]; 81]; 2],
             pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
         },
+        depth_limit: 9,
     };
     let mut pos = Position::default();
     let mut position_history = HashSet::new();
@@ -685,12 +693,7 @@ fn main() {
                     remain_move_number = 1
                 }
                 max_time = std::cmp::max(max_time / remain_move_number, min_time);
-                let m = BakuretsuTenseiTaro::go(
-                    engine.eval.clone(),
-                    &mut pos,
-                    &mut position_history,
-                    max_time,
-                );
+                let m = BakuretsuTenseiTaro::go(engine, &mut pos, &mut position_history, max_time);
                 println!("bestmove {}", m);
             }
             "stop" => {
