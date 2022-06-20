@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
+  format-check:
 
     runs-on: ubuntu-latest
 
@@ -27,18 +27,48 @@ jobs:
       with:
         toolchain: stable
         components: rustfmt, clippy
-    - name: Run fmt
+    - name: Run bakuretsu_komasute_taro_r fmt
       uses: actions-rs/cargo@v1
       with:
         command: fmt
         args: --all --manifest-path engine/bakuretsu_komasute_taro_r/Cargo.toml -- --check
-    - name: Run clippy
+    - name: Run bakuretsu_komasute_taro_r clippy
       uses: actions-rs/cargo@v1
       with:
         command: clippy
         args: --manifest-path engine/bakuretsu_komasute_taro_r/Cargo.toml -- -D warnings
-    - name: Run tests
+    - name: Run bakuretsu_komasute_taro_r tests
       uses: actions-rs/cargo@v1
       with:
         command: test
         args: --release --manifest-path engine/bakuretsu_komasute_taro_r/Cargo.toml --all-features
+    - name: Run bakuretsu_tensei_taro engine fmt
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all --manifest-path engine/bakuretsu_tensei_taro/Cargo.toml -- --check
+    - name: Run bakuretsu_tensei_taro engine clippy
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: --manifest-path engine/bakuretsu_tensei_taro/Cargo.toml -- -D warnings
+    - name: Run bakuretsu_tensei_taro engine tests
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --release --manifest-path engine/bakuretsu_tensei_taro/Cargo.toml --all-features
+    - name: Run bakuretsu_tensei_taro train fmt
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all --manifest-path train/bakuretsu_tensei_taro/Cargo.toml -- --check
+    - name: Run bakuretsu_tensei_taro train clippy
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: --manifest-path train/bakuretsu_tensei_taro/Cargo.toml -- -D warnings
+    - name: Run bakuretsu_tensei_taro train tests
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --release --manifest-path train/bakuretsu_tensei_taro/Cargo.toml --all-features
