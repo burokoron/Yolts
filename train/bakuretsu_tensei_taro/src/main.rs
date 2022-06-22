@@ -496,6 +496,7 @@ impl BakuretsuTenseiTaro {
         */
 
         let mut nega = search::NegaAlpha {
+            my_turn: pos.side_to_move(),
             start_time: Instant::now(),
             max_time,
             num_searched: 0,
@@ -511,6 +512,12 @@ impl BakuretsuTenseiTaro {
             },
         };
 
+        // 入玉宣言の確認
+        if search::is_nyugyoku_win(pos) {
+            return "win".to_string();
+        }
+
+        // 通常の探索
         let mut best_move = "resign".to_string();
         for depth in 1..=v.depth_limit {
             nega.max_depth = depth;
@@ -594,7 +601,7 @@ impl BakuretsuTenseiTaro {
 fn main() {
     // 初期化
     let engine = &mut BakuretsuTenseiTaro {
-        engine_name: "爆裂転生太郎".to_string(),
+        engine_name: "爆裂訓練太郎".to_string(),
         author: "burokoron".to_string(),
         eval_file_path: "eval.json".to_string(),
         eval: Eval {
