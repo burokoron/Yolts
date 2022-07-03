@@ -2,16 +2,15 @@ use encoding::all::WINDOWS_31J;
 use encoding::{EncoderTrap, Encoding};
 use shogi_core::{Color, Hand, Move, PartialPosition, Piece, Square};
 use shogi_usi_parser::FromUsi;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{stdout, Write};
-use std::{collections::HashSet, time::Instant};
 use yasai::Position;
 
 mod search;
 
 #[derive(Clone)]
 pub struct Eval {
-    pieces_in_board: Vec<Vec<Vec<i32>>>,
+    pieces_in_board: Vec<Vec<i32>>,
     pieces_in_hand: Vec<Vec<Vec<i32>>>,
 }
 
@@ -24,66 +23,65 @@ struct BakuretsuTenseiTaro {
 }
 
 impl BakuretsuTenseiTaro {
-    fn usi(v: &BakuretsuTenseiTaro) {
-        /*
-        エンジン名(バージョン番号付き)とオプションを返答
+    fn new() -> Self {
+        //! エンジンのインスタンスを作成
 
-        Args:
-            v: &BakuretsuTenseiTaro
-                エンジン実行中に一時保存するデータ群
-        */
+        BakuretsuTenseiTaro {
+            engine_name: "爆裂訓練太郎".to_string(),
+            author: "burokoron".to_string(),
+            eval_file_path: "eval.json".to_string(),
+            eval: Eval {
+                pieces_in_board: vec![vec![0; 31]; 81],
+                pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
+            },
+            depth_limit: 9,
+        }
+    }
+
+    fn usi(&self) {
+        //! エンジン名(バージョン番号付き)とオプションを返答
+
         print!("id name ");
         let mut out = stdout();
         let bytes = WINDOWS_31J
-            .encode(&v.engine_name, EncoderTrap::Ignore)
-            .unwrap();
-        out.write_all(&bytes[..]).unwrap();
+            .encode(&self.engine_name, EncoderTrap::Ignore)
+            .expect("Cannot encode the engine name.");
+        out.write_all(&bytes[..])
+            .expect("Cannot write the engine name.");
         println!(" version {}", env!("CARGO_PKG_VERSION"));
-        println!("id author {}", v.author);
+        println!("id author {}", self.author);
         println!(
             "option name EvalFile type string default {}",
-            v.eval_file_path
+            self.eval_file_path
         );
         println!(
             "option name DepthLimit type spin default {} min 0 max 1000",
-            v.depth_limit
+            self.depth_limit
         );
         println!("usiok");
     }
 
-    fn isready(v: &mut BakuretsuTenseiTaro) {
-        /*
-        対局の準備をする
-        */
+    fn isready(&mut self) {
+        //! 対局の準備をする
+        //! - 評価関数の読み込み
 
         // 評価関数の読み込み
         let eval_file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
-            .open(&v.eval_file_path)
+            .open(&self.eval_file_path)
             .expect("Not Found eval file.");
         let reader = std::io::BufReader::new(eval_file);
         let eval: serde_json::Value =
-            serde_json::from_reader(reader).expect("Can not Read json file.");
+            serde_json::from_reader(reader).expect("Cannot Read json file.");
         // 盤面
         for sq in Square::all() {
-            let value = eval["pieces_dict"][sq.array_index().to_string()]["0"]
-                .as_i64()
-                .unwrap();
-            v.eval.pieces_in_board[Color::Black.array_index()][sq.array_index()][0] = value as i32;
-            v.eval.pieces_in_board[Color::White.array_index()][sq.array_index()][0] = value as i32;
             for piece in Piece::all() {
                 let value = eval["pieces_dict"][sq.array_index().to_string()]
                     [piece.as_u8().to_string()]
                 .as_i64()
-                .unwrap();
-                let color = if piece.as_u8() <= 16 {
-                    Color::Black
-                } else {
-                    Color::White
-                };
-                v.eval.pieces_in_board[color.array_index()][sq.array_index()]
-                    [piece.piece_kind().array_index() as usize + 1] = value as i32;
+                .expect("Cannot Convert eval_file value.");
+                self.eval.pieces_in_board[sq.array_index()][piece.as_u8() as usize] = value as i32;
             }
         }
         // 持ち駒
@@ -102,8 +100,8 @@ impl BakuretsuTenseiTaro {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()]
                                 [i.to_string()]
                             .as_i64()
-                            .unwrap();
-                            v.eval.pieces_in_hand[color.array_index()][piece.array_index()][i] =
+                            .expect("Cannot Convert eval_file value.");
+                            self.eval.pieces_in_hand[color.array_index()][piece.array_index()][i] =
                                 value as i32;
                         }
                     }
@@ -112,8 +110,8 @@ impl BakuretsuTenseiTaro {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()]
                                 [i.to_string()]
                             .as_i64()
-                            .unwrap();
-                            v.eval.pieces_in_hand[color.array_index()][piece.array_index()][i] =
+                            .expect("Cannot Convert eval_file value.");
+                            self.eval.pieces_in_hand[color.array_index()][piece.array_index()][i] =
                                 value as i32;
                         }
                     }
@@ -122,8 +120,8 @@ impl BakuretsuTenseiTaro {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()]
                                 [i.to_string()]
                             .as_i64()
-                            .unwrap();
-                            v.eval.pieces_in_hand[color.array_index()][piece.array_index()][i] =
+                            .expect("Cannot Convert eval_file value.");
+                            self.eval.pieces_in_hand[color.array_index()][piece.array_index()][i] =
                                 value as i32;
                         }
                     }
@@ -135,42 +133,41 @@ impl BakuretsuTenseiTaro {
         println!("readyok");
     }
 
-    fn setoption(v: &mut BakuretsuTenseiTaro, name: String, value: String) {
-        /*
-        エンジンのパラメータを設定する
-
-        Args:
-            v: &BakuretsuKomasuteTaroR
-                エンジン実行中に一時保存するデータ群
-            name: String
-                パラメータ名
-            value: String
-                設定する値
-        */
+    fn setoption(&mut self, name: String, value: String) {
+        //! エンジンのパラメータを設定する
+        //!
+        //! - Arguments
+        //!   - name: String
+        //!     - パラメータ名
+        //!   - value: String
+        //!     - 設定する値
 
         match &name[..] {
-            "EvalFile" => v.eval_file_path = value,
-            "DepthLimit" => v.depth_limit = value.parse().unwrap(),
+            "EvalFile" => self.eval_file_path = value,
+            "DepthLimit" => self.depth_limit = value.parse().unwrap(),
             _ => (),
         }
     }
 
-    fn usinewgame() {
-        /*
-        新規対局の準備をする
-        */
+    fn usinewgame(&mut self) {
+        //! 新規対局の準備をする
+        //! - 何もしない
     }
 
-    fn position(startpos: &str, moves: Vec<&str>) -> (Position, HashSet<u64>) {
-        /*
-        現局面の反映
-
-        Args:
-            startpos: &str
-                開始局面のsfen局面
-            moves: Vec<&str>
-                開始局面から現在までの手順
-        */
+    fn position(&self, startpos: &str, moves: Vec<&str>) -> (Position, HashSet<u64>) {
+        //! 現局面の反映
+        //!
+        //! - Arguments
+        //!   - startpos: &str
+        //!     - 開始局面のsfen局面
+        //!   - moves: Vec<&str>
+        //!     - 開始局面から現在までの手順
+        //! - Returns
+        //!   - (pos: Position, position_history: HashSet<u64>)
+        //!   - pos: Position
+        //!     - 現局面
+        //!   - position_history: HashSet<u64>
+        //!     - 局面の履歴
 
         // 開始局面の反映
         let mut pos = Position::new(PartialPosition::from_usi(startpos).unwrap());
@@ -225,24 +222,33 @@ impl BakuretsuTenseiTaro {
     }
 
     fn go(
-        v: &mut BakuretsuTenseiTaro,
+        &mut self,
         pos: &mut Position,
         position_history: &mut HashSet<u64>,
         max_time: i32,
     ) -> String {
-        /*
-        思考し、最善手を返す
-        */
+        //! 思考し、最善手を返す
+        //!
+        //! - Arguments
+        //!   - pos: &mut Position
+        //!     - 現在の局面
+        //!   - position_history: &mut HashSet<u64>
+        //!     - 局面の履歴
+        //!   - max_time: i32
+        //!     - 探索制限時間
+        //! - Returns
+        //!   - best_move: String
+        //!     - 最善手
 
         let mut nega = search::NegaAlpha {
             my_turn: pos.side_to_move(),
-            start_time: Instant::now(),
+            start_time: std::time::Instant::now(),
             max_time,
             num_searched: 0,
             max_depth: 1,
             max_board_number: pos.ply(),
             best_move_pv: None,
-            eval: v.eval.clone(),
+            eval: self.eval.clone(),
             hash_table: search::HashTable {
                 pos: HashMap::new(),
             },
@@ -258,10 +264,9 @@ impl BakuretsuTenseiTaro {
 
         // 通常の探索
         let mut best_move = "resign".to_string();
-        for depth in 1..=v.depth_limit {
+        for depth in 1..=self.depth_limit {
             nega.max_depth = depth;
-            let value =
-                search::NegaAlpha::search(&mut nega, pos, position_history, depth, -30000, 30000);
+            let value = nega.search(pos, position_history, depth, -30000, 30000);
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
             let nps = if elapsed_time != 0 {
@@ -278,7 +283,7 @@ impl BakuretsuTenseiTaro {
                         "resign".to_string()
                     }
                 };
-                let mut pv = search::pv_to_sfen(&mut nega, pos, position_history);
+                let mut pv = nega.pv_to_sfen(pos, position_history);
                 if pv.is_empty() {
                     pv = "resign ".to_string();
                 }
@@ -303,52 +308,32 @@ impl BakuretsuTenseiTaro {
         best_move
     }
 
-    fn stop() {
-        /*
-        思考停止コマンドに対応する
-        */
-
-        // 未対応
+    fn stop(&self) {
+        //! 思考停止コマンドに対応する
+        //! - 未対応
     }
 
-    fn ponderhit() {
-        /*
-        先読みが当たった場合に対応する
-        */
-
-        // 未対応
+    fn ponderhit(&self) {
+        //! 先読みが当たった場合に対応する
+        //! - 未対応
     }
 
-    fn quit() {
-        /*
-        強制終了
-        */
+    fn quit(&self) {
+        //! 強制終了
+        //! - すぐに反応はできないが、終了する
 
-        // すぐに反応はできないが、終了する
         std::process::exit(1);
     }
 
-    fn gameover() {
-        /*
-        対局終了通知に対応する
-        */
-
-        // 今のところ対応の必要なし
+    fn gameover(&self) {
+        //! 対局終了通知に対応する
+        //! - 今のところ対応の必要なし
     }
 }
 
 fn main() {
     // 初期化
-    let engine = &mut BakuretsuTenseiTaro {
-        engine_name: "爆裂訓練太郎".to_string(),
-        author: "burokoron".to_string(),
-        eval_file_path: "eval.json".to_string(),
-        eval: Eval {
-            pieces_in_board: vec![vec![vec![0; 31]; 81]; 2],
-            pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
-        },
-        depth_limit: 9,
-    };
+    let engine = &mut BakuretsuTenseiTaro::new();
     let mut pos = Position::default();
     let mut position_history = HashSet::new();
 
@@ -365,19 +350,19 @@ fn main() {
         match &inputs[0][..] {
             "usi" => {
                 // エンジン名を返答
-                BakuretsuTenseiTaro::usi(engine);
+                engine.usi();
             }
             "isready" => {
                 // 対局準備
-                BakuretsuTenseiTaro::isready(engine);
+                engine.isready();
             }
             "setoption" => {
                 // エンジンのパラメータ設定
-                BakuretsuTenseiTaro::setoption(engine, inputs[2].clone(), inputs[4].clone());
+                engine.setoption(inputs[2].clone(), inputs[4].clone());
             }
             "usinewgame" => {
                 // 新規対局準備
-                BakuretsuTenseiTaro::usinewgame();
+                engine.usinewgame();
             }
             "position" => {
                 // 現局面の反映
@@ -403,7 +388,7 @@ fn main() {
                         )
                     }
                 };
-                (pos, position_history) = BakuretsuTenseiTaro::position(&startpos, moves);
+                (pos, position_history) = engine.position(&startpos, moves);
             }
             "go" => {
                 // 思考して指し手を返答
@@ -442,24 +427,24 @@ fn main() {
                     remain_move_number = 1
                 }
                 max_time = std::cmp::max(max_time / remain_move_number, min_time);
-                let m = BakuretsuTenseiTaro::go(engine, &mut pos, &mut position_history, max_time);
+                let m = engine.go(&mut pos, &mut position_history, max_time);
                 println!("bestmove {}", m);
             }
             "stop" => {
                 // 思考停止コマンド
-                BakuretsuTenseiTaro::stop();
+                engine.stop();
             }
             "ponderhit" => {
                 // 先読みが当たった場合
-                BakuretsuTenseiTaro::ponderhit();
+                engine.ponderhit();
             }
             "quit" => {
                 // 強制終了
-                BakuretsuTenseiTaro::quit();
+                engine.quit();
             }
             "gameover" => {
                 // 対局終了
-                BakuretsuTenseiTaro::gameover();
+                engine.gameover();
             }
             _ => (),
         }

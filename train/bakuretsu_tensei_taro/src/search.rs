@@ -1,6 +1,5 @@
 use shogi_core::{Color, Move, Piece, PieceKind, Square};
 use std::collections::{HashMap, HashSet};
-use std::time::Instant;
 use yasai::Position;
 
 use crate::Eval;
@@ -22,7 +21,7 @@ pub struct MoveOrdering {
 
 pub struct NegaAlpha {
     pub my_turn: Color,
-    pub start_time: Instant,
+    pub start_time: std::time::Instant,
     pub max_time: i32,
     pub num_searched: u64,
     pub max_depth: u32,
@@ -34,7 +33,16 @@ pub struct NegaAlpha {
 }
 
 impl NegaAlpha {
-    fn evaluate(v: &NegaAlpha, pos: &mut Position) -> i32 {
+    fn evaluate(&self, pos: &mut Position) -> i32 {
+        //! 局面の評価
+        //!
+        //! - Arguments
+        //!   - pos: &mut Position
+        //!     - 評価する局面
+        //! - Returns
+        //!   - value: i32
+        //!     - 評価値
+
         // 入玉宣言の確認
         if is_nyugyoku_win(pos) {
             return 30000 - pos.ply() as i32;
@@ -45,10 +53,7 @@ impl NegaAlpha {
         for sq in Square::all() {
             let pc = pos.piece_at(sq);
             if let Some(ref pc) = pc {
-                value += v.eval.pieces_in_board[pc.color().array_index()][sq.array_index()]
-                    [pc.piece_kind().array_index() + 1];
-            } else {
-                value += v.eval.pieces_in_board[0][sq.array_index()][0];
+                value += self.eval.pieces_in_board[sq.array_index()][pc.as_u8() as usize];
             }
         }
         for color in Color::all() {
@@ -57,7 +62,7 @@ impl NegaAlpha {
                 if piece_type == PieceKind::King {
                     break;
                 }
-                value += v.eval.pieces_in_hand[color.array_index()][piece_type.array_index()]
+                value += self.eval.pieces_in_hand[color.array_index()][piece_type.array_index()]
                     [hand.Hand_count(piece_type) as usize];
             }
         }
@@ -70,25 +75,42 @@ impl NegaAlpha {
     }
 
     pub fn search(
-        v: &mut NegaAlpha,
+        &mut self,
         pos: &mut Position,
         position_history: &mut HashSet<u64>,
         depth: u32,
         mut alpha: i32,
         mut beta: i32,
     ) -> i32 {
+        //! ネガアルファ探索
+        //!
+        //! - Arguments
+        //!   - pos: &mut Position
+        //!     - 探索する局面
+        //!   - position_history: &mut HashSet<u64>
+        //!     - 局面の履歴
+        //!   - depth: u32
+        //!     - 残り探索深さ
+        //!   - mut alpha: i32
+        //!     - アルファ値
+        //!   - mut beta: i32
+        //!     - ベータ値
+        //! - Returns
+        //!   - value: i32
+        //!     - 評価値
+
         // 探索局面数
-        v.num_searched += 1;
+        self.num_searched += 1;
 
         // 最大手数の計算
-        if v.max_board_number < pos.ply() {
-            v.max_board_number = pos.ply();
+        if self.max_board_number < pos.ply() {
+            self.max_board_number = pos.ply();
         }
 
         // 時間制限なら
-        let end = v.start_time.elapsed();
+        let end = self.start_time.elapsed();
         let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
-        if elapsed_time >= v.max_time {
+        if elapsed_time >= self.max_time {
             return alpha;
         }
 
@@ -103,7 +125,7 @@ impl NegaAlpha {
 
         // 置換表の確認
         let mut best_move = None;
-        let hash_table_value = v.hash_table.pos.get(&pos.key());
+        let hash_table_value = self.hash_table.pos.get(&pos.key());
         if let Some(hash_table_value) = hash_table_value {
             if depth <= hash_table_value.depth {
                 let lower = hash_table_value.lower;
@@ -122,7 +144,7 @@ impl NegaAlpha {
 
         // 探索深さ制限なら
         if depth == 0 {
-            return NegaAlpha::evaluate(v, pos);
+            return self.evaluate(pos);
         }
 
         // Mate Distance Pruning
@@ -142,7 +164,7 @@ impl NegaAlpha {
         }
 
         // Futility Pruning
-        let value = NegaAlpha::evaluate(v, pos);
+        let value = self.evaluate(pos);
         if value <= alpha - 400 * depth as i32 {
             return value;
         }
@@ -151,7 +173,7 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            if pos.side_to_move() == v.my_turn {
+            if pos.side_to_move() == self.my_turn {
                 return -30000 + pos.ply() as i32;
             } else {
                 return 30000 - pos.ply() as i32;
@@ -181,7 +203,8 @@ impl NegaAlpha {
                 Move::Drop { piece, to: _ } => piece,
             };
             let to = m.to().array_index();
-            value += v.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to];
+            value +=
+                self.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to];
             move_list.push((m, value));
         }
         move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
@@ -190,12 +213,12 @@ impl NegaAlpha {
         position_history.insert(pos.key());
         for m in move_list {
             pos.do_move(m.0);
-            let value = -NegaAlpha::search(v, pos, position_history, depth - 1, -beta, -best_value);
+            let value = -self.search(pos, position_history, depth - 1, -beta, -best_value);
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
-                if depth == v.max_depth {
-                    v.best_move_pv = Some(m.0);
+                if depth == self.max_depth {
+                    self.best_move_pv = Some(m.0);
                 }
             }
             pos.undo_move(m.0);
@@ -211,7 +234,7 @@ impl NegaAlpha {
                     Move::Drop { piece, to: _ } => piece,
                 };
                 let to = m.0.to().array_index();
-                v.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to] +=
+                self.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to] +=
                     depth as i64 * depth as i64;
                 break;
             }
@@ -219,12 +242,16 @@ impl NegaAlpha {
         position_history.remove(&pos.key());
 
         // 置換表へ登録
-        let hash_table_value = v.hash_table.pos.entry(pos.key()).or_insert(HashTableValue {
-            depth: 0,
-            upper: 30000,
-            lower: -30000,
-            best_move: None,
-        });
+        let hash_table_value = self
+            .hash_table
+            .pos
+            .entry(pos.key())
+            .or_insert(HashTableValue {
+                depth: 0,
+                upper: 30000,
+                lower: -30000,
+                best_move: None,
+            });
         if depth > hash_table_value.depth {
             if best_value <= alpha {
                 hash_table_value.upper = best_value;
@@ -240,10 +267,82 @@ impl NegaAlpha {
 
         best_value
     }
+
+    pub fn pv_to_sfen(
+        &mut self,
+        pos: &mut Position,
+        position_history: &mut HashSet<u64>,
+    ) -> String {
+        //! 最善手順を置換表から集める
+        //!
+        //! - Arguments
+        //!   - pos: &mut Position
+        //!     - 最善手順を調べる局面
+        //!   - position_history: &mut HashSet<u64>
+        //!     - 局面の履歴
+        //! - Returns
+        //!   - pv: String
+        //!     - 最善手順
+
+        let mut pv = "".to_string();
+        let mut moves = Vec::new();
+
+        loop {
+            if position_history.contains(&pos.key()) {
+                break;
+            }
+            let hash_table = self.hash_table.pos.get(&pos.key());
+            if let Some(hash_table_value) = hash_table {
+                let best_move = hash_table_value.best_move;
+                if let Some(best_move) = best_move {
+                    let legal_moves = pos.legal_moves();
+                    let mut is_legal = false;
+                    for m in legal_moves {
+                        if m == best_move {
+                            is_legal = true;
+                            break;
+                        }
+                    }
+                    if !is_legal {
+                        break;
+                    }
+                    pv += &move_to_sfen(best_move);
+                    pv += " ";
+                    position_history.insert(pos.key());
+                    pos.do_move(best_move);
+                    moves.push(best_move);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        loop {
+            let m = moves.pop();
+            if let Some(m) = m {
+                pos.undo_move(m);
+                position_history.remove(&pos.key());
+            } else {
+                break;
+            }
+        }
+
+        pv
+    }
 }
 
 pub fn is_nyugyoku_win(pos: &Position) -> bool {
-    // 入玉宣言の確認
+    //! 入玉宣言(27点法)の確認
+    //!
+    //! - Arguments
+    //!   - pos: &Position
+    //!     - 判定する局面
+    //! - Returns
+    //!   - : bool
+    //!     - 判定結果
+
     if pos.side_to_move() == Color::Black && !pos.in_check() {
         let sq = pos.king_position(Color::Black);
         if let Some(ref sq) = sq {
@@ -362,6 +461,15 @@ pub fn is_nyugyoku_win(pos: &Position) -> bool {
 }
 
 pub fn move_to_sfen(m: Move) -> String {
+    //! shogi_core::Move の指し手を文字列に変換する
+    //!
+    //! - Arguments
+    //!   - m: Move
+    //!     - 変換する指し手
+    //! - Returns
+    //!   - : String
+    //!     - 文字列に変換した指し手
+
     match m {
         Move::Normal { from, to, promote } => {
             let from = format!(
@@ -404,57 +512,4 @@ pub fn move_to_sfen(m: Move) -> String {
             format!("{piece}{to}")
         }
     }
-}
-
-pub fn pv_to_sfen(
-    v: &mut NegaAlpha,
-    pos: &mut Position,
-    position_history: &mut HashSet<u64>,
-) -> String {
-    let mut pv = "".to_string();
-    let mut moves = Vec::new();
-
-    loop {
-        if position_history.contains(&pos.key()) {
-            break;
-        }
-        let hash_table = v.hash_table.pos.get(&pos.key());
-        if let Some(hash_table_value) = hash_table {
-            let best_move = hash_table_value.best_move;
-            if let Some(best_move) = best_move {
-                let legal_moves = pos.legal_moves();
-                let mut is_legal = false;
-                for m in legal_moves {
-                    if m == best_move {
-                        is_legal = true;
-                        break;
-                    }
-                }
-                if !is_legal {
-                    break;
-                }
-                pv += &move_to_sfen(best_move);
-                pv += " ";
-                position_history.insert(pos.key());
-                pos.do_move(best_move);
-                moves.push(best_move);
-            } else {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-
-    loop {
-        let m = moves.pop();
-        if let Some(m) = m {
-            pos.undo_move(m);
-            position_history.remove(&pos.key());
-        } else {
-            break;
-        }
-    }
-
-    pv
 }
