@@ -319,10 +319,9 @@ impl BakuretsuTenseiTaro {
     }
 
     fn quit(&self) {
-        //! 強制終了
+        //! 終了コマンドに対応する
         //! - すぐに反応はできないが、終了する
-
-        std::process::exit(1);
+        //! - 現時点で終了時にやるべきことはない
     }
 
     fn gameover(&self) {
@@ -441,6 +440,7 @@ fn main() {
             "quit" => {
                 // 強制終了
                 engine.quit();
+                break;
             }
             "gameover" => {
                 // 対局終了
