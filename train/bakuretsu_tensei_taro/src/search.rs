@@ -513,3 +513,32 @@ pub fn move_to_sfen(m: Move) -> String {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::search;
+    use shogi_core::PartialPosition;
+    use shogi_usi_parser::FromUsi;
+    use yasai::Position;
+
+    #[test]
+    fn is_nyugyoku_win() {
+        // 初期局面、入玉宣言できない
+        let pos = Position::new(
+            PartialPosition::from_usi(
+                "sfen lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+            )
+            .expect("Initialization error"),
+        );
+        assert!(!search::is_nyugyoku_win(&pos));
+
+        // 入玉宣言できる局面
+        let pos = Position::new(
+            PartialPosition::from_usi(
+                "sfen 4+P1K2/6P+L+P/9/r+L3G2+b/ls3P3/5g3/3kn2br/1+l1+np2p+p/1s6s w P2gs2n10p 258",
+            )
+            .expect("Initialization error"),
+        );
+        assert!(search::is_nyugyoku_win(&pos));
+    }
+}

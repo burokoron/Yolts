@@ -450,3 +450,23 @@ fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::BakuretsuTenseiTaro;
+
+    #[test]
+    fn go() {
+        let engine = &mut BakuretsuTenseiTaro::new();
+        engine.setoption("EvalFile".to_string(), "test/eval.json".to_string());
+        engine.setoption("DepthLimit".to_string(), "4".to_string());
+        engine.isready();
+        let mut pos;
+        let mut position_history;
+        (pos, position_history) = engine.position(
+            "sfen lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+            vec!["7g7f"],
+        );
+        engine.go(&mut pos, &mut position_history, 10000);
+    }
+}
