@@ -4,6 +4,8 @@ use yasai::Position;
 
 use crate::Eval;
 
+pub const MATING_VALUE: i32 = 30000;
+
 pub struct HashTableValue {
     depth: u32,
     upper: i32,
@@ -45,7 +47,7 @@ impl NegaAlpha {
 
         // 入玉宣言の確認
         if is_nyugyoku_win(pos) {
-            return 30000 - pos.ply() as i32;
+            return MATING_VALUE - pos.ply() as i32;
         }
 
         // 通常の評価
@@ -117,7 +119,7 @@ impl NegaAlpha {
         // 同一局面の確認
         if position_history.contains(&pos.key()) {
             if pos.in_check() {
-                return 30000 - pos.ply() as i32;
+                return MATING_VALUE - pos.ply() as i32;
             } else {
                 return 0;
             }
@@ -148,14 +150,14 @@ impl NegaAlpha {
         }
 
         // Mate Distance Pruning
-        let mating_value = -30000 + pos.ply() as i32;
+        let mating_value = -MATING_VALUE + pos.ply() as i32;
         if mating_value > alpha {
             alpha = mating_value;
             if beta <= mating_value {
                 return mating_value;
             }
         }
-        let mating_value = 30000 - pos.ply() as i32;
+        let mating_value = MATING_VALUE - pos.ply() as i32;
         if mating_value < beta {
             beta = mating_value;
             if alpha >= mating_value {
@@ -174,9 +176,9 @@ impl NegaAlpha {
         // 合法手なしなら
         if legal_moves.is_empty() {
             if pos.side_to_move() == self.my_turn {
-                return -30000 + pos.ply() as i32;
+                return -MATING_VALUE + pos.ply() as i32;
             } else {
-                return 30000 - pos.ply() as i32;
+                return MATING_VALUE - pos.ply() as i32;
             }
         }
 
@@ -248,8 +250,8 @@ impl NegaAlpha {
             .entry(pos.key())
             .or_insert(HashTableValue {
                 depth: 0,
-                upper: 30000,
-                lower: -30000,
+                upper: MATING_VALUE,
+                lower: -MATING_VALUE,
                 best_move: None,
             });
         if depth > hash_table_value.depth {

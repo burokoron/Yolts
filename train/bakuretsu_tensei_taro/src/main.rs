@@ -7,6 +7,7 @@ use std::io::{stdout, Write};
 use yasai::Position;
 
 mod search;
+use crate::search::MATING_VALUE;
 
 #[derive(Clone)]
 pub struct Eval {
@@ -266,7 +267,7 @@ impl BakuretsuTenseiTaro {
         let mut best_move = "resign".to_string();
         for depth in 1..=self.depth_limit {
             nega.max_depth = depth;
-            let value = nega.search(pos, position_history, depth, -30000, 30000);
+            let value = nega.search(pos, position_history, depth, -MATING_VALUE, MATING_VALUE);
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
             let nps = if elapsed_time != 0 {
@@ -300,7 +301,7 @@ impl BakuretsuTenseiTaro {
             }
 
             // mateなら探索終了
-            if value.abs() > 29000 {
+            if value.abs() > MATING_VALUE - 1000 {
                 break;
             }
         }
