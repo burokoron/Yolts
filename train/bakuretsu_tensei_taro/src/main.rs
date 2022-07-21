@@ -1,5 +1,6 @@
 use encoding::all::WINDOWS_31J;
 use encoding::{EncoderTrap, Encoding};
+use extra::ThompsonSamplingBook;
 use shogi_core::{Color, Hand, Move, PartialPosition, Piece, Square};
 use shogi_usi_parser::FromUsi;
 use std::collections::{HashMap, HashSet};
@@ -8,6 +9,7 @@ use yasai::Position;
 
 mod search;
 use crate::search::MATING_VALUE;
+mod extra;
 
 #[derive(Clone)]
 pub struct Eval {
@@ -21,6 +23,9 @@ struct BakuretsuTenseiTaro {
     eval_file_path: String,
     eval: Eval,
     depth_limit: u32,
+    book_file_path: String,
+    narrow_book: u32,
+    use_book: bool,
 }
 
 impl BakuretsuTenseiTaro {
@@ -36,6 +41,9 @@ impl BakuretsuTenseiTaro {
                 pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
             },
             depth_limit: 9,
+            book_file_path: "book.json".to_string(),
+            narrow_book: 10,
+            use_book: true,
         }
     }
 
@@ -59,6 +67,11 @@ impl BakuretsuTenseiTaro {
             "option name DepthLimit type spin default {} min 0 max 1000",
             self.depth_limit
         );
+        println!(
+            "option name NarrowBook type spin default {} min 1 max 10000000",
+            self.narrow_book
+        );
+        println!("option name UseBook type check default {}", self.use_book);
         println!("usiok");
     }
 
@@ -146,6 +159,8 @@ impl BakuretsuTenseiTaro {
         match &name[..] {
             "EvalFile" => self.eval_file_path = value,
             "DepthLimit" => self.depth_limit = value.parse().unwrap(),
+            "NarrowBook" => self.narrow_book = value.parse().unwrap(),
+            "UseBook" => self.use_book = value.parse().unwrap(),
             _ => (),
         }
     }
@@ -155,7 +170,11 @@ impl BakuretsuTenseiTaro {
         //! - 何もしない
     }
 
-    fn position(&self, startpos: &str, moves: Vec<&str>) -> (Position, HashSet<u64>) {
+    fn position(
+        &self,
+        startpos: &str,
+        moves: Vec<&str>,
+    ) -> (PartialPosition, Position, HashSet<u64>) {
         //! 現局面の反映
         //!
         //! - Arguments
@@ -164,14 +183,17 @@ impl BakuretsuTenseiTaro {
         //!   - moves: Vec<&str>
         //!     - 開始局面から現在までの手順
         //! - Returns
-        //!   - (pos: Position, position_history: HashSet<u64>)
+        //!   - (ppos: PartialPosition, pos: Position, position_history: HashSet<u64>)
+        //!   - ppos: PartialPosition
+        //!     - 現在の局面(shogi_core)
         //!   - pos: Position
-        //!     - 現局面
+        //!     - 現在の局面(yasai)
         //!   - position_history: HashSet<u64>
         //!     - 局面の履歴
 
         // 開始局面の反映
-        let mut pos = Position::new(PartialPosition::from_usi(startpos).unwrap());
+        let mut ppos = PartialPosition::from_usi(startpos).unwrap();
+        let mut pos = Position::new(ppos.clone());
         let mut position_history = HashSet::new();
         position_history.insert(pos.key());
 
@@ -214,16 +236,19 @@ impl BakuretsuTenseiTaro {
                     Move::Normal { from, to, promote }
                 }
             };
+            ppos.make_move(m);
             pos.do_move(m);
             position_history.insert(pos.key());
         }
         position_history.remove(&pos.key());
 
-        (pos, position_history)
+        (ppos, pos, position_history)
     }
 
     fn go(
         &mut self,
+        ppos: &PartialPosition,
+        tsbook: &mut ThompsonSamplingBook,
         pos: &mut Position,
         position_history: &mut HashSet<u64>,
         max_time: i32,
@@ -231,8 +256,12 @@ impl BakuretsuTenseiTaro {
         //! 思考し、最善手を返す
         //!
         //! - Arguments
+        //!   - ppos: &PartialPosition
+        //!     - 現在の局面(shogi_core)
+        //!   - tsbook: &mut ThompsonSamplingBook
+        //!     - 定跡
         //!   - pos: &mut Position
-        //!     - 現在の局面
+        //!     - 現在の局面(yasai)
         //!   - position_history: &mut HashSet<u64>
         //!     - 局面の履歴
         //!   - max_time: i32
@@ -241,6 +270,14 @@ impl BakuretsuTenseiTaro {
         //!   - best_move: String
         //!     - 最善手
 
+        // 定跡の検索
+        if self.use_book {
+            if let Some(bestmove) = tsbook.search((*ppos).clone(), self.narrow_book) {
+                return bestmove;
+            }
+        }
+
+        // 探索
         let mut nega = search::NegaAlpha {
             my_turn: pos.side_to_move(),
             start_time: std::time::Instant::now(),
@@ -334,8 +371,10 @@ impl BakuretsuTenseiTaro {
 fn main() {
     // 初期化
     let engine = &mut BakuretsuTenseiTaro::new();
+    let mut ppos = PartialPosition::default();
     let mut pos = Position::default();
     let mut position_history = HashSet::new();
+    let tsbook = &mut extra::ThompsonSamplingBook::new();
 
     loop {
         // 入力の受け取り
@@ -354,6 +393,7 @@ fn main() {
             }
             "isready" => {
                 // 対局準備
+                tsbook.load(engine.book_file_path.clone());
                 engine.isready();
             }
             "setoption" => {
@@ -388,7 +428,7 @@ fn main() {
                         )
                     }
                 };
-                (pos, position_history) = engine.position(&startpos, moves);
+                (ppos, pos, position_history) = engine.position(&startpos, moves);
             }
             "go" => {
                 // 思考して指し手を返答
@@ -427,7 +467,7 @@ fn main() {
                     remain_move_number = 1
                 }
                 max_time = std::cmp::max(max_time / remain_move_number, min_time);
-                let m = engine.go(&mut pos, &mut position_history, max_time);
+                let m = engine.go(&ppos, tsbook, &mut pos, &mut position_history, max_time);
                 println!("bestmove {}", m);
             }
             "stop" => {
@@ -447,6 +487,46 @@ fn main() {
                 // 対局終了
                 engine.gameover();
             }
+            "extra" => match &inputs[1][..] {
+                "load" => {
+                    // 定跡の読み込み
+                    tsbook.load(inputs[2].clone());
+                }
+                "save" => {
+                    // 定跡の保存
+                    tsbook.save(inputs[2].clone());
+                }
+                "make" => {
+                    // Thompson Sampling に基づいて指し手を生成
+                    let ppos = PartialPosition::from_usi(&format!(
+                        "sfen {} {} {} 1",
+                        inputs[2], inputs[3], inputs[4]
+                    ))
+                    .unwrap();
+                    let bestmove = tsbook.make(ppos);
+                    if let Some(bestmove) = bestmove {
+                        println!("{}", bestmove);
+                    } else {
+                        println!("None");
+                    }
+                }
+                "entry" => {
+                    // 局面の勝敗を定跡に登録
+                    let ppos = PartialPosition::from_usi(&format!(
+                        "sfen {} {} {} 1",
+                        inputs[2], inputs[3], inputs[4]
+                    ))
+                    .unwrap();
+                    let winner = match &inputs[5][..] {
+                        "b" => Some(Color::Black),
+                        "w" => Some(Color::White),
+                        "d" => None,
+                        _ => unreachable!(),
+                    };
+                    tsbook.entry(ppos, winner);
+                }
+                _ => (),
+            },
             _ => (),
         }
     }
@@ -454,6 +534,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use crate::extra;
     use crate::BakuretsuTenseiTaro;
 
     #[test]
@@ -463,11 +544,13 @@ mod tests {
         engine.setoption("DepthLimit".to_string(), "4".to_string());
         engine.isready();
         let mut pos;
+        let ppos;
+        let tsbook = &mut extra::ThompsonSamplingBook::new();
         let mut position_history;
-        (pos, position_history) = engine.position(
+        (ppos, pos, position_history) = engine.position(
             "sfen lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
             vec!["7g7f"],
         );
-        engine.go(&mut pos, &mut position_history, 10000);
+        engine.go(&ppos, tsbook, &mut pos, &mut position_history, 10000);
     }
 }
