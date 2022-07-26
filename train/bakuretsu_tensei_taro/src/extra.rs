@@ -275,7 +275,7 @@ mod test {
         let bestmove = tsbook.search(ppos.clone(), 1);
         assert!(bestmove.is_none());
 
-        let bestmove = tsbook.search(ppos.clone(), 0);
+        let bestmove = tsbook.search(ppos, 0);
         assert!(bestmove.is_some());
     }
 }

@@ -1,6 +1,5 @@
 use encoding::all::WINDOWS_31J;
 use encoding::{EncoderTrap, Encoding};
-use extra::ThompsonSamplingBook;
 use shogi_core::{Color, Hand, Move, PartialPosition, Piece, Square};
 use shogi_usi_parser::FromUsi;
 use std::collections::{HashMap, HashSet};
@@ -248,7 +247,7 @@ impl BakuretsuTenseiTaro {
     fn go(
         &mut self,
         ppos: &PartialPosition,
-        tsbook: &mut ThompsonSamplingBook,
+        tsbook: &mut extra::ThompsonSamplingBook,
         pos: &mut Position,
         position_history: &mut HashSet<u64>,
         max_time: i32,
