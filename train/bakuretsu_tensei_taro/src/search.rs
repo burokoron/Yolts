@@ -166,10 +166,12 @@ impl NegaAlpha {
         }
 
         // Futility Pruning
+        /*
         let value = self.evaluate(pos);
         if value <= alpha - 400 * depth as i32 {
             return value;
         }
+        */
 
         // 全合法手検索
         let legal_moves = pos.legal_moves();
