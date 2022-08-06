@@ -1,12 +1,12 @@
+import json
+import os
 import pickle
 import typing
-import os
 
 import cshogi
 import numpy as np
-import json
-from tqdm import tqdm
 from sklearn import linear_model, metrics
+from tqdm import tqdm
 
 
 def sfen2features(sfen: str, value: int, matting_value: int):
@@ -89,7 +89,7 @@ def sfen2features_reverse(sfen: str, value: int, matting_value: int):
     bp, wp = board.pieces_in_hand
     pieces = board.pieces
     features: typing.List[int] = []
-    for i in range(len(pieces)-1, -1, -1):
+    for i in range(len(pieces) - 1, -1, -1):
         if pieces[i] == 5:
             pieces[i] = 6
         elif pieces[i] == 6:
@@ -224,12 +224,17 @@ def main(root_path: str, train_ratio: float, matting_value: int):
             clf = linear_model.SGDRegressor(
                 alpha=alpha,
                 fit_intercept=False,
-                max_iter=max_iter, verbose=1, random_state=42, n_iter_no_change=max_iter
+                max_iter=max_iter,
+                verbose=1,
+                random_state=42,
+                n_iter_no_change=max_iter,
             )
             clf.fit(X=x_train, y=y_train)  # type:ignore
 
             y_predict: typing.Any = clf.predict(X=x_test)  # type:ignore
-            score = metrics.mean_squared_error(y_true=y_test, y_pred=y_predict)  # type:ignore
+            score = metrics.mean_squared_error(  # type:ignore
+                y_true=y_test, y_pred=y_predict
+            )
             score_list.append(f"alpha = {alpha}, max_iter = {max_iter}, MSE = {score}")
 
             pieces_dict = {}
@@ -252,9 +257,13 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                     if piece == 0:
                         pieces_in_hand_dict[str(sq - 81)] = {str(piece): 0}
                         piece += 1
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)  # type:ignore
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
+                            param  # type:ignore
+                        )
                     else:
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)  # type:ignore
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
+                            param  # type:ignore
+                        )
                     piece += 1
                     if piece > 18:
                         sq += 1
@@ -263,9 +272,13 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                     if piece == 0:
                         pieces_in_hand_dict[str(sq - 81)] = {str(piece): 0}
                         piece += 1
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)  # type:ignore
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
+                            param  # type:ignore
+                        )
                     else:
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)  # type:ignore
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
+                            param  # type:ignore
+                        )
                     piece += 1
                     if piece > 4:
                         sq += 1
@@ -274,9 +287,13 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                     if piece == 0:
                         pieces_in_hand_dict[str(sq - 81)] = {str(piece): 0}
                         piece += 1
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)  # type:ignore
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
+                            param  # type:ignore
+                        )
                     else:
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)  # type:ignore
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
+                            param  # type:ignore
+                        )
                     piece += 1
                     if piece > 2:
                         sq += 1
@@ -285,7 +302,7 @@ def main(root_path: str, train_ratio: float, matting_value: int):
             # 評価パラメータを保存
             eval_dict: typing.Any = {
                 "pieces_dict": pieces_dict,
-                "pieces_in_hand_dict": pieces_in_hand_dict
+                "pieces_in_hand_dict": pieces_in_hand_dict,
             }
             with open(f"eval_{alpha}_{max_iter}_{score}.json", "w") as f:
                 json.dump(eval_dict, f)

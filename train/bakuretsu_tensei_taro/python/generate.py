@@ -1,10 +1,10 @@
-import dataclasses
-import subprocess
-import os
-import typing
 import argparse
-import pickle
+import dataclasses
 import datetime
+import os
+import pickle
+import subprocess
+import typing
 
 import cshogi
 
@@ -19,7 +19,7 @@ class Engine:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=os.path.dirname(self.path)
+            cwd=os.path.dirname(self.path),
         )
 
     def usi(self, verbose: bool = False):
@@ -100,14 +100,14 @@ class Engine:
             raise AttributeError()
 
     def go(
-            self,
-            btime: int,
-            wtime: int,
-            byoyomi: int = -1,
-            binc: int = -1,
-            winc: int = -1,
-            verbose: bool = False
-            ):
+        self,
+        btime: int,
+        wtime: int,
+        byoyomi: int = -1,
+        binc: int = -1,
+        winc: int = -1,
+        verbose: bool = False,
+    ):
         cmd = f"go btime {btime} wtime {wtime} "
         if byoyomi >= 0:
             cmd += f"byoyomi {byoyomi}\n"
@@ -140,7 +140,7 @@ class Engine:
                 out = out.split(" ")
                 for i in range(len(out)):
                     if out[i] == "cp":
-                        value = int(out[i+1])
+                        value = int(out[i + 1])
                         break
             elif out.split(" ")[0] == "bestmove":
                 return (out.split(" ")[1], value)
@@ -239,8 +239,14 @@ def main(train_engine_path: str, target_engine_path: str, games: int):
     target_engine.isready(verbose=False)
 
     # 対局
-    game_results = {f"{train_engine.name} wins": 0, f"{target_engine.name} wins": 0, "draw": 0}
-    game_sfen: typing.Dict[int, typing.Dict[str, typing.List[typing.Union[int, str, None]]]] = {}
+    game_results = {
+        f"{train_engine.name} wins": 0,
+        f"{target_engine.name} wins": 0,
+        "draw": 0,
+    }
+    game_sfen: typing.Dict[
+        int, typing.Dict[str, typing.List[typing.Union[int, str, None]]]
+    ] = {}
     for i in range(games):
         board: typing.Any = cshogi.Board()  # type:ignore
         moves = ""
@@ -251,16 +257,10 @@ def main(train_engine_path: str, target_engine_path: str, games: int):
         game_sfen[i] = {"moves": [], "value": [], "winner": []}
         while winner == "":
             if board.move_number % 2 == i % 2:
-                train_engine.position(
-                    sfen="startpos",
-                    moves=moves,
-                    verbose=False
-                )
+                train_engine.position(sfen="startpos", moves=moves, verbose=False)
                 if make:
                     sfen = " ".join(board.sfen().split(" ")[:-1])
-                    bestmove = train_engine.extra_make(
-                        sfen=sfen, verbose=False
-                    )
+                    bestmove = train_engine.extra_make(sfen=sfen, verbose=False)
                     if bestmove == "None":
                         make = False
                         entry_position.append(sfen)
@@ -291,12 +291,10 @@ def main(train_engine_path: str, target_engine_path: str, games: int):
                     entry_position.append(sfen)
                     if not make:
                         entry = False
-                target_engine.position(
-                    sfen="startpos",
-                    moves=moves,
-                    verbose=False
+                target_engine.position(sfen="startpos", moves=moves, verbose=False)
+                bestmove, _ = target_engine.go(
+                    btime=0, wtime=0, byoyomi=10000, verbose=False
                 )
-                bestmove, _ = target_engine.go(btime=0, wtime=0, byoyomi=10000, verbose=False)
                 game_sfen[i]["value"].append(None)
 
             board.push_usi(bestmove)
@@ -346,7 +344,9 @@ def main(train_engine_path: str, target_engine_path: str, games: int):
 
     print(game_results)
     date = datetime.datetime.today()
-    with open(f"sfen_{date.year}{date.month}{date.day}{date.hour}{date.minute}.pkl", "wb") as f:
+    with open(
+        f"sfen_{date.year}{date.month}{date.day}{date.hour}{date.minute}.pkl", "wb"
+    ) as f:
         pickle.dump(game_sfen, f)
 
 
@@ -360,5 +360,5 @@ if __name__ == "__main__":
     main(
         train_engine_path=args.train_engine_path,
         target_engine_path=args.target_engine_path,
-        games=args.games
+        games=args.games,
     )

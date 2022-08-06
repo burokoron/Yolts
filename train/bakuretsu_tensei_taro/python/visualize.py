@@ -1,7 +1,7 @@
+import json
 import typing
 
 import matplotlib.pyplot as plt
-import json
 
 
 def main(eval_file_path: str):
@@ -10,17 +10,29 @@ def main(eval_file_path: str):
     ax_list: typing.List[typing.Any] = []
     fig = plt.figure(figsize=(10, 8))
     titles = [
-        "fu", "kyo", "kei", "gin", "kin", "kaku", "hi", "gyoku",
-        "to", "narikyo", "narikei", "narigin", "uma", "ryu",
+        "fu",
+        "kyo",
+        "kei",
+        "gin",
+        "kin",
+        "kaku",
+        "hi",
+        "gyoku",
+        "to",
+        "narikyo",
+        "narikei",
+        "narigin",
+        "uma",
+        "ryu",
     ]
     for i in range(1, 15):
         ax_list.append(fig.add_subplot(4, 4, i))
-        ax_list[-1].set_title(titles[i-1])
+        ax_list[-1].set_title(titles[i - 1])
 
     for p in eval_dict["pieces_dict"]["0"]:
         v = 0
         ig = 0
-        score = [[0]*9 for _ in range(9)]
+        score = [[0] * 9 for _ in range(9)]
         for sq in eval_dict["pieces_dict"]:
             if eval_dict["pieces_dict"][sq][p] == 0:
                 ig += 1
