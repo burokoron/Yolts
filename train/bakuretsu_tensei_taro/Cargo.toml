@@ -1,6 +1,6 @@
 [package]
 name = "bakuretsu_tensei_taro"
-version = "0.0.3"
+version = "1.0.0"
 edition = "2021"
 
 [profile.release]
@@ -10,7 +10,9 @@ lto = true
 
 [dependencies]
 encoding = "0.2.33"
+rand = "0.8.5"
 rand_distr = "0.4.3"
+serde = { version = "1.0.139", features = ["derive"] }
 serde_json = "1.0.59"
 shogi_core = "0.1.4"
 shogi_usi_parser = "0.1.0"
