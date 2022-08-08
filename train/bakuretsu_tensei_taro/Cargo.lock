@@ -16,7 +16,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "bakuretsu_tensei_taro"
-version = "0.0.3"
+version = "1.0.1"
 dependencies = [
  "encoding",
  "rand",
@@ -284,10 +284,11 @@ checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
 
 [[package]]
 name = "yasai"
-version = "0.4.0"
-source = "git+https://github.com/burokoron/yasai/?rev=840351ee6a316199b12b4a8f8d80721b6231987e#840351ee6a316199b12b4a8f8d80721b6231987e"
+version = "0.5.0"
+source = "git+https://github.com/burokoron/yasai/?rev=e28da8c5f5587124b767232d66d4a5d58175e4f1#e28da8c5f5587124b767232d66d4a5d58175e4f1"
 dependencies = [
  "arrayvec",
+ "cfg-if",
  "once_cell",
  "rand",
  "shogi_core",
