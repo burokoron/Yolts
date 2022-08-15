@@ -70,6 +70,10 @@ impl BakuretsuTenseiTaro {
             self.eval_file_path
         );
         println!(
+            "option name EvalNyuGyokuFile type string default {}",
+            self.eval_nyugyoku_file_path
+        );
+        println!(
             "option name DepthLimit type spin default {} min 0 max 1000",
             self.depth_limit
         );
@@ -230,6 +234,7 @@ impl BakuretsuTenseiTaro {
 
         match &name[..] {
             "EvalFile" => self.eval_file_path = value,
+            "EvalNyuGyokuFile" => self.eval_nyugyoku_file_path = value,
             "DepthLimit" => self.depth_limit = value.parse().unwrap(),
             "NarrowBook" => self.narrow_book = value.parse().unwrap(),
             "UseBook" => self.use_book = value.parse().unwrap(),
@@ -624,6 +629,10 @@ mod tests {
     fn go() {
         let engine = &mut BakuretsuTenseiTaro::new();
         engine.setoption("EvalFile".to_string(), "test/eval.json".to_string());
+        engine.setoption(
+            "EvalNyuGyokuFile".to_string(),
+            "test/eval_nyugyoku.json".to_string(),
+        );
         engine.setoption("DepthLimit".to_string(), "4".to_string());
         engine.isready();
         let mut pos;

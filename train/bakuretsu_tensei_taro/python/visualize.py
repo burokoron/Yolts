@@ -56,6 +56,6 @@ def main(eval_file_path: str):
 
 
 if __name__ == "__main__":
-    eval_file_path = "eval.json"  # 評価関数ファイル
+    eval_file_path = "eval_5e-06_1000_302897.13702268794.json"  # 評価関数ファイル
 
     main(eval_file_path=eval_file_path)

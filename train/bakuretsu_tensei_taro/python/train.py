@@ -216,8 +216,8 @@ def main(root_path: str, train_ratio: float, matting_value: int):
     print(x_train.shape)
     print(x_test.shape)
 
-    alpha_list = [0.0005, 0.0001, 0.00005, 0.00001, 0.000005]
-    max_iter_list = [200, 500, 1500, 3000, 6000]
+    alpha_list = [0.00005, 0.000025, 0.00001, 0.0000075, 0.000005]
+    max_iter_list = [1000]
     score_list: typing.List[str] = []
     for alpha in alpha_list:
         for max_iter in max_iter_list:
@@ -310,7 +310,7 @@ def main(root_path: str, train_ratio: float, matting_value: int):
 
 if __name__ == "__main__":
     root_path = "./"  # 学習棋譜があるルートフォルダ
-    matting_value = 5676  # 勝ち(負け)を読み切ったときの評価値
+    matting_value = 6842  # 勝ち(負け)を読み切ったときの評価値
     train_ratio = 0.9  # 学習に使用する棋譜ファイルの割合
 
     main(root_path=root_path, train_ratio=train_ratio, matting_value=matting_value)
