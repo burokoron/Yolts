@@ -20,7 +20,9 @@ struct BakuretsuTenseiTaro {
     engine_name: String,
     author: String,
     eval_file_path: String,
+    eval_nyugyoku_file_path: String,
     eval: Eval,
+    eval_nyugyoku: Eval,
     depth_limit: u32,
     book_file_path: String,
     narrow_book: u32,
@@ -35,7 +37,12 @@ impl BakuretsuTenseiTaro {
             engine_name: "爆裂訓練太郎".to_string(),
             author: "burokoron".to_string(),
             eval_file_path: "eval.json".to_string(),
+            eval_nyugyoku_file_path: "eval_nyugyoku.json".to_string(),
             eval: Eval {
+                pieces_in_board: vec![vec![0; 31]; 81],
+                pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
+            },
+            eval_nyugyoku: Eval {
                 pieces_in_board: vec![vec![0; 31]; 81],
                 pieces_in_hand: vec![vec![vec![0; 19]; 8]; 2],
             },
@@ -78,7 +85,7 @@ impl BakuretsuTenseiTaro {
         //! 対局の準備をする
         //! - 評価関数の読み込み
 
-        // 評価関数の読み込み
+        // 通常の評価関数の読み込み
         let eval_file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -136,6 +143,72 @@ impl BakuretsuTenseiTaro {
                             .expect("Cannot Convert eval_file value.");
                             self.eval.pieces_in_hand[color.array_index()][piece.array_index()][i] =
                                 value as i32;
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        // 入玉用の評価関数の読み込み
+        let eval_file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.eval_nyugyoku_file_path)
+            .expect("Not Found eval file.");
+        let reader = std::io::BufReader::new(eval_file);
+        let eval: serde_json::Value =
+            serde_json::from_reader(reader).expect("Cannot Read json file.");
+        // 盤面
+        for sq in Square::all() {
+            for piece in Piece::all() {
+                let value = eval["pieces_dict"][sq.array_index().to_string()]
+                    [piece.as_u8().to_string()]
+                .as_i64()
+                .expect("Cannot Convert eval_file value.");
+                self.eval_nyugyoku.pieces_in_board[sq.array_index()][piece.as_u8() as usize] =
+                    value as i32;
+            }
+        }
+        // 持ち駒
+        for color in Color::all() {
+            for piece in Hand::all_hand_pieces() {
+                let piece_idx = {
+                    if color == Color::Black {
+                        piece.array_index()
+                    } else {
+                        piece.array_index() + 7
+                    }
+                };
+                match piece.array_index() {
+                    0 => {
+                        for i in 0..19 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()]
+                                [i.to_string()]
+                            .as_i64()
+                            .expect("Cannot Convert eval_file value.");
+                            self.eval_nyugyoku.pieces_in_hand[color.array_index()]
+                                [piece.array_index()][i] = value as i32;
+                        }
+                    }
+                    1 | 2 | 3 | 4 => {
+                        for i in 0..5 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()]
+                                [i.to_string()]
+                            .as_i64()
+                            .expect("Cannot Convert eval_file value.");
+                            self.eval_nyugyoku.pieces_in_hand[color.array_index()]
+                                [piece.array_index()][i] = value as i32;
+                        }
+                    }
+                    5 | 6 => {
+                        for i in 0..3 {
+                            let value = eval["pieces_in_hand_dict"][piece_idx.to_string()]
+                                [i.to_string()]
+                            .as_i64()
+                            .expect("Cannot Convert eval_file value.");
+                            self.eval_nyugyoku.pieces_in_hand[color.array_index()]
+                                [piece.array_index()][i] = value as i32;
                         }
                     }
                     _ => unreachable!(),
@@ -276,13 +349,13 @@ impl BakuretsuTenseiTaro {
             }
         }
 
-        // 探索
+        // 現在の局面が通常の評価関数で評価値が一定以下(互角)ならそのまま、そうでないなら入玉用評価関数に変更
         let mut nega = search::NegaAlpha {
             my_turn: pos.side_to_move(),
             start_time: std::time::Instant::now(),
             max_time,
             num_searched: 0,
-            max_depth: 1,
+            max_depth: 0,
             max_board_number: pos.ply(),
             best_move_pv: None,
             eval: self.eval.clone(),
@@ -293,6 +366,14 @@ impl BakuretsuTenseiTaro {
                 piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
             },
         };
+        let value = nega.search(pos, position_history, 0, -MATING_VALUE, MATING_VALUE);
+        let is_eval_nyugyoku;
+        if value > 2000 {
+            nega.eval = self.eval_nyugyoku.clone();
+            is_eval_nyugyoku = true;
+        } else {
+            is_eval_nyugyoku = false;
+        }
 
         // 入玉宣言の確認
         if search::is_nyugyoku_win(pos) {
@@ -303,7 +384,10 @@ impl BakuretsuTenseiTaro {
         let mut best_move = "resign".to_string();
         for depth in 1..=self.depth_limit {
             nega.max_depth = depth;
-            let value = nega.search(pos, position_history, depth, -MATING_VALUE, MATING_VALUE);
+            let mut value = nega.search(pos, position_history, depth, -MATING_VALUE, MATING_VALUE);
+            if is_eval_nyugyoku && value.abs() <= MATING_VALUE - 1000 {
+                value = (value as f32 * (6842.0 / 5676.0)) as i32;
+            }
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
             let nps = if elapsed_time != 0 {
