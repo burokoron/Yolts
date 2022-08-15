@@ -2,9 +2,9 @@ import dataclasses
 import datetime
 import os
 import pickle
+import random
 import subprocess
 import typing
-import random
 
 import cshogi
 
@@ -221,10 +221,11 @@ class Engine:
 
 
 def main(
-        train_engine_path: str,
-        target_engine_path: typing.List[str],
-        choice_weights: typing.List[float],
-        games: int):
+    train_engine_path: str,
+    target_engine_path: typing.List[str],
+    choice_weights: typing.List[float],
+    games: int,
+):
     # 学習対象のエンジンの起動
     train_engine = Engine(path=train_engine_path)
     train_engine.usi(verbose=False)
@@ -245,7 +246,11 @@ def main(
         target_engine_list[-1].setoption(name="DepthLimit", value="4", verbose=False)
         target_engine_list[-1].isready(verbose=False)
         if target_engine_list[-1].name is not None:
-            game_results[target_engine_list[-1].name] = {"wins": 0, "loses": 0, "draw": 0}
+            game_results[target_engine_list[-1].name] = {
+                "wins": 0,
+                "loses": 0,
+                "draw": 0,
+            }
         else:
             raise ValueError
 
@@ -254,7 +259,9 @@ def main(
         int, typing.Dict[str, typing.List[typing.Union[int, str, None]]]
     ] = {}
     for i in range(games):
-        target_engine = random.choices(target_engine_list, weights=choice_weights, k=1)[0]
+        target_engine = random.choices(target_engine_list, weights=choice_weights, k=1)[
+            0
+        ]
         board: typing.Any = cshogi.Board()  # type:ignore
         moves = ""
         winner = ""
