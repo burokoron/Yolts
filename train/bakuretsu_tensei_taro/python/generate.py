@@ -1,8 +1,8 @@
-import argparse
 import dataclasses
 import datetime
 import os
 import pickle
+import random
 import subprocess
 import typing
 
@@ -220,7 +220,12 @@ class Engine:
             raise AttributeError()
 
 
-def main(train_engine_path: str, target_engine_path: str, games: int):
+def main(
+    train_engine_path: str,
+    target_engine_path: typing.List[str],
+    choice_weights: typing.List[float],
+    games: int,
+):
     # 学習対象のエンジンの起動
     train_engine = Engine(path=train_engine_path)
     train_engine.usi(verbose=False)
@@ -231,23 +236,32 @@ def main(train_engine_path: str, target_engine_path: str, games: int):
     train_engine.extra_load("book.json")
 
     # 仮想敵のエンジンの起動
-    target_engine = Engine(path=target_engine_path)
-    target_engine.usi(verbose=False)
-    print(f"engine: {target_engine.name}")
-    print(f"author: {target_engine.author}")
-    target_engine.setoption(name="DepthLimit", value="4", verbose=False)
-    target_engine.isready(verbose=False)
+    game_results: typing.Dict[str, typing.Dict[str, int]] = {}
+    target_engine_list: typing.List[Engine] = []
+    for path in target_engine_path:
+        target_engine_list.append(Engine(path=path))
+        target_engine_list[-1].usi(verbose=False)
+        print(f"engine: {target_engine_list[-1].name}")
+        print(f"author: {target_engine_list[-1].author}")
+        target_engine_list[-1].setoption(name="DepthLimit", value="4", verbose=False)
+        target_engine_list[-1].isready(verbose=False)
+        if target_engine_list[-1].name is not None:
+            game_results[target_engine_list[-1].name] = {
+                "wins": 0,
+                "loses": 0,
+                "draw": 0,
+            }
+        else:
+            raise ValueError
 
     # 対局
-    game_results = {
-        f"{train_engine.name} wins": 0,
-        f"{target_engine.name} wins": 0,
-        "draw": 0,
-    }
     game_sfen: typing.Dict[
         int, typing.Dict[str, typing.List[typing.Union[int, str, None]]]
     ] = {}
     for i in range(games):
+        target_engine = random.choices(target_engine_list, weights=choice_weights, k=1)[
+            0
+        ]
         board: typing.Any = cshogi.Board()  # type:ignore
         moves = ""
         winner = ""
@@ -314,33 +328,41 @@ def main(train_engine_path: str, target_engine_path: str, games: int):
                     winner = "w"
             if board.move_number > 512:
                 winner = "d"
-        if winner == "b":
-            if i % 2 == 1:
-                game_results[f"{train_engine.name} wins"] += 1
+        if target_engine.name is not None:
+            if winner == "b":
+                if i % 2 == 1:
+                    game_results[target_engine.name]["wins"] += 1
+                else:
+                    game_results[target_engine.name]["loses"] += 1
+            elif winner == "w":
+                if i % 2 == 0:
+                    game_results[target_engine.name]["wins"] += 1
+                else:
+                    game_results[target_engine.name]["loses"] += 1
             else:
-                game_results[f"{target_engine.name} wins"] += 1
-        elif winner == "w":
-            if i % 2 == 0:
-                game_results[f"{train_engine.name} wins"] += 1
-            else:
-                game_results[f"{target_engine.name} wins"] += 1
+                game_results[target_engine.name]["draw"] += 1
         else:
-            game_results["draw"] += 1
+            raise ValueError
         game_sfen[i]["winner"].append(winner)
 
         for sfen in entry_position:
             train_engine.extra_entry(sfen=sfen, winner=winner, verbose=False)
 
         print(game_results)
-        train_wins = game_results[f"{train_engine.name} wins"]
-        target_wins = game_results[f"{target_engine.name} wins"]
-        draw = game_results["draw"]
+        train_wins = 0
+        target_wins = 0
+        draw = 0
+        for key in game_results:
+            train_wins += game_results[key]["wins"]
+            target_wins += game_results[key]["loses"]
+            draw += game_results[key]["draw"]
         rate = (train_wins + draw * 0.5) / (train_wins + target_wins + draw)
         print(f"train_engine win_rate: {rate}")
 
     train_engine.extra_save(path="book.json", verbose=False)
     train_engine.quit(verbose=False)
-    target_engine.quit(verbose=False)
+    for i in range(len(target_engine_list)):
+        target_engine_list[i].quit(verbose=False)
 
     print(game_results)
     date = datetime.datetime.today()
@@ -351,14 +373,17 @@ def main(train_engine_path: str, target_engine_path: str, games: int):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="定跡と学習データの作成")
-    parser.add_argument("train_engine_path", help="学習対象のエンジンのパス")
-    parser.add_argument("target_engine_path", help="仮想敵のエンジンのパス")
-    parser.add_argument("games", type=int, help="対局数")
-    args = parser.parse_args()
+    train_engine_path = "train_engine_path"  # 学習対象のエンジンパス
+    target_engine_path = [  # 仮想敵のエンジンパス
+        "target_engine_path1",
+        "target_engine_path2",
+    ]
+    choice_weights = [1 / 0.698, 1 / 0.339]  # 仮想敵のエンジンの選択重み
+    games = 400  # 対局数
 
     main(
-        train_engine_path=args.train_engine_path,
-        target_engine_path=args.target_engine_path,
-        games=args.games,
+        train_engine_path=train_engine_path,
+        target_engine_path=target_engine_path,
+        choice_weights=choice_weights,
+        games=games,
     )
