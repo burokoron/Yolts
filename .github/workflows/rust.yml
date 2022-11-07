@@ -57,6 +57,21 @@ jobs:
       with:
         command: test
         args: --release --manifest-path engine/bakuretsu_tensei_taro/Cargo.toml --all-features
+    - name: Run bakuretsu_komahiroi_taro engine fmt
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all --manifest-path engine/bakuretsu_komahiroi_taro/Cargo.toml -- --check
+    - name: Run bakuretsu_komahiroi_taro engine clippy
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: --manifest-path engine/bakuretsu_komahiroi_taro/Cargo.toml -- -D warnings
+    - name: Run bakuretsu_komahiroi_taro engine tests
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --release --manifest-path engine/bakuretsu_komahiroi_taro/Cargo.toml --all-features
     - name: Run bakuretsu_tensei_taro train fmt
       uses: actions-rs/cargo@v1
       with:
