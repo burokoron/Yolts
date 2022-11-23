@@ -9,8 +9,10 @@ from sklearn import linear_model, metrics
 from tqdm import tqdm
 
 
-def sfen2features(sfen: str, value: int, matting_value: int):
-    board: typing.Any = cshogi.Board(sfen)  # type:ignore
+def sfen2features(
+    sfen: str, value: int, matting_value: int
+) -> typing.Tuple[typing.List[int], int]:
+    board: typing.Any = cshogi.Board(sfen)
     bp, wp = board.pieces_in_hand
     pieces = board.pieces
     features: typing.List[int] = []
@@ -84,8 +86,10 @@ def sfen2features(sfen: str, value: int, matting_value: int):
     return features, value
 
 
-def sfen2features_reverse(sfen: str, value: int, matting_value: int):
-    board: typing.Any = cshogi.Board(sfen)  # type:ignore
+def sfen2features_reverse(
+    sfen: str, value: int, matting_value: int
+) -> typing.Tuple[typing.List[int], int]:
+    board: typing.Any = cshogi.Board(sfen)
     bp, wp = board.pieces_in_hand
     pieces = board.pieces
     features: typing.List[int] = []
@@ -164,24 +168,24 @@ def sfen2features_reverse(sfen: str, value: int, matting_value: int):
     return features, value
 
 
-def main(root_path: str, train_ratio: float, matting_value: int):
-    x_train: typing.Union[typing.List[typing.List[int]], np.ndarray] = []
-    y_train: typing.Union[typing.List[int], np.ndarray] = []
-    x_test: typing.Union[typing.List[typing.List[int]], np.ndarray] = []
-    y_test: typing.Union[typing.List[int], np.ndarray] = []
+def main(root_path: str, train_ratio: float, matting_value: int) -> None:
+    x_train: typing.Any = []
+    y_train: typing.Any = []
+    x_test: typing.Any = []
+    y_test: typing.Any = []
     same_sfen: typing.Set[str] = set()
 
     file_list = [file for file in os.listdir(root_path) if file.split(".")[-1] == "pkl"]
     for i, file in enumerate(file_list):
         if file.split(".")[-1] != "pkl":
             continue
-        with open(file, "rb") as f:
-            kifu_dict = pickle.load(f)
+        with open(file, "rb") as fb:
+            kifu_dict = pickle.load(fb)
         for key in tqdm(kifu_dict, desc="kifu"):
             moves = kifu_dict[key]["moves"]
             values = kifu_dict[key]["value"]
 
-            board: typing.Any = cshogi.Board()  # type:ignore
+            board: typing.Any = cshogi.Board()
             for move, value in zip(moves, values):
                 board.push_usi(move)
                 if value is not None:
@@ -209,10 +213,10 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                         x_train.append(features)
                         y_train.append(value)
 
-    x_train = np.array(x_train)  # type:ignore
-    y_train = np.array(y_train)  # type:ignore
-    x_test = np.array(x_test)  # type:ignore
-    y_test = np.array(y_test)  # type:ignore
+    x_train = np.array(x_train)
+    y_train = np.array(y_train)
+    x_test = np.array(x_test)
+    y_test = np.array(y_test)
     print(x_train.shape)
     print(x_test.shape)
 
@@ -229,26 +233,26 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                 random_state=42,
                 n_iter_no_change=max_iter,
             )
-            clf.fit(X=x_train, y=y_train)  # type:ignore
+            clf.fit(X=x_train, y=y_train)
 
-            y_predict: typing.Any = clf.predict(X=x_test)  # type:ignore
-            score = metrics.mean_squared_error(  # type:ignore
-                y_true=y_test, y_pred=y_predict
-            )
+            y_predict: typing.Any = clf.predict(X=x_test)
+            score = metrics.mean_squared_error(y_true=y_test, y_pred=y_predict)
             score_list.append(f"alpha = {alpha}, max_iter = {max_iter}, MSE = {score}")
+
+            assert clf.coef_ is not None
 
             pieces_dict = {}
             pieces_in_hand_dict = {}
             sq = 0
             piece = 0
-            for param in clf.coef_:  # type:ignore
+            for param in clf.coef_:
                 if sq < 81:
                     if piece == 0:
                         pieces_dict[str(sq)] = {str(piece): 0}
                         piece += 1
-                        pieces_dict[str(sq)][str(piece)] = int(param)  # type:ignore
+                        pieces_dict[str(sq)][str(piece)] = int(param)
                     else:
-                        pieces_dict[str(sq)][str(piece)] = int(param)  # type:ignore
+                        pieces_dict[str(sq)][str(piece)] = int(param)
                     piece += 1
                     if piece > 30:
                         sq += 1
@@ -257,13 +261,9 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                     if piece == 0:
                         pieces_in_hand_dict[str(sq - 81)] = {str(piece): 0}
                         piece += 1
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
-                            param  # type:ignore
-                        )
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)
                     else:
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
-                            param  # type:ignore
-                        )
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)
                     piece += 1
                     if piece > 18:
                         sq += 1
@@ -272,13 +272,9 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                     if piece == 0:
                         pieces_in_hand_dict[str(sq - 81)] = {str(piece): 0}
                         piece += 1
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
-                            param  # type:ignore
-                        )
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)
                     else:
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
-                            param  # type:ignore
-                        )
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)
                     piece += 1
                     if piece > 4:
                         sq += 1
@@ -287,13 +283,9 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                     if piece == 0:
                         pieces_in_hand_dict[str(sq - 81)] = {str(piece): 0}
                         piece += 1
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
-                            param  # type:ignore
-                        )
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)
                     else:
-                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(
-                            param  # type:ignore
-                        )
+                        pieces_in_hand_dict[str(sq - 81)][str(piece)] = int(param)
                     piece += 1
                     if piece > 2:
                         sq += 1
@@ -304,8 +296,8 @@ def main(root_path: str, train_ratio: float, matting_value: int):
                 "pieces_dict": pieces_dict,
                 "pieces_in_hand_dict": pieces_in_hand_dict,
             }
-            with open(f"eval_{alpha}_{max_iter}_{score}.json", "w") as f:
-                json.dump(eval_dict, f)
+            with open(f"eval_{alpha}_{max_iter}_{score}.json", "w") as ft:
+                json.dump(eval_dict, ft)
 
 
 if __name__ == "__main__":

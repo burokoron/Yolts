@@ -13,31 +13,34 @@ import cshogi
 class Engine:
     path: str
 
-    def __post_init__(self):
-        self.engine = subprocess.Popen(
+    def __post_init__(self) -> None:
+        self.engine: typing.Any = subprocess.Popen(
             [self.path],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=os.path.dirname(self.path),
         )
+        self.name: typing.Union[None, str] = None
+        self.author: typing.Union[None, str] = None
 
-    def usi(self, verbose: bool = False):
+    def usi(self, verbose: bool = False) -> None:
         cmd = "usi\n"
         if verbose:
+            assert self.engine is not None
+            assert self.engine.stdin is not None
+
             print(f"In: {cmd}", end="")
-        if self.engine is not None and self.engine.stdin is not None:
             self.engine.stdin.write(cmd.encode("cp932"))
             self.engine.stdin.flush()
-        else:
-            raise AttributeError()
 
         while True:
-            if self.engine.stdout is not None:
-                self.engine.stdout.flush()
-                out = self.engine.stdout.readline().replace(b"\n", b"").decode("cp932")
-            else:
-                raise AttributeError()
+            assert self.engine is not None
+            assert self.engine.stdout is not None
+
+            self.engine.stdout.flush()
+            out = self.engine.stdout.readline().replace(b"\n", b"").decode("cp932")
+
             if verbose:
                 print(f"Out: {out}")
 
@@ -50,15 +53,16 @@ class Engine:
             elif " ".join(out.split(" ")[:2]) == "id author":
                 self.author = " ".join(out.split(" ")[2:])
 
-    def isready(self, verbose: bool = False):
+    def isready(self, verbose: bool = False) -> None:
         cmd = "isready\n"
         if verbose:
             print(f"In: {cmd}", end="")
-        if self.engine is not None and self.engine.stdin is not None:
-            self.engine.stdin.write(cmd.encode("cp932"))
-            self.engine.stdin.flush()
-        else:
-            raise AttributeError()
+
+        assert self.engine is not None
+        assert self.engine.stdin is not None
+
+        self.engine.stdin.write(cmd.encode("cp932"))
+        self.engine.stdin.flush()
 
         while True:
             if self.engine.stdout is not None:
@@ -74,18 +78,23 @@ class Engine:
             if out == "readyok":
                 break
 
-    def setoption(self, name: str, value: str, verbose: bool = False):
+    def setoption(self, name: str, value: str, verbose: bool = False) -> None:
         cmd = f"setoption name {name} value {value}\n"
         if verbose:
             print(f"In: {cmd}", end="")
-        if self.engine is not None and self.engine.stdin is not None:
-            self.engine.stdin.write(cmd.encode("cp932"))
-            self.engine.stdin.flush()
 
-    def usinewgame(self):
+        assert self.engine is not None
+        assert self.engine.stdin is not None
+
+        self.engine.stdin.write(cmd.encode("cp932"))
+        self.engine.stdin.flush()
+
+    def usinewgame(self) -> None:
         print("can not use command")
 
-    def position(self, sfen: str = "startpos", moves: str = "", verbose: bool = False):
+    def position(
+        self, sfen: str = "startpos", moves: str = "", verbose: bool = False
+    ) -> None:
         cmd = f"position {sfen}"
         if moves == "":
             cmd += "\n"
@@ -93,11 +102,12 @@ class Engine:
             cmd += f" moves{moves}\n"
         if verbose:
             print(f"In: {cmd}", end="")
-        if self.engine is not None and self.engine.stdin is not None:
-            self.engine.stdin.write(cmd.encode("cp932"))
-            self.engine.stdin.flush()
-        else:
-            raise AttributeError()
+
+        assert self.engine is not None
+        assert self.engine.stdin is not None
+
+        self.engine.stdin.write(cmd.encode("cp932"))
+        self.engine.stdin.flush()
 
     def go(
         self,
@@ -107,7 +117,7 @@ class Engine:
         binc: int = -1,
         winc: int = -1,
         verbose: bool = False,
-    ):
+    ) -> typing.Tuple[str, typing.Union[int, None]]:
         cmd = f"go btime {btime} wtime {wtime} "
         if byoyomi >= 0:
             cmd += f"byoyomi {byoyomi}\n"
@@ -118,11 +128,12 @@ class Engine:
                 cmd += f"winc {winc}\n"
         if verbose:
             print(f"In: {cmd}", end="")
-        if self.engine is not None and self.engine.stdin is not None:
-            self.engine.stdin.write(cmd.encode("cp932"))
-            self.engine.stdin.flush()
-        else:
-            raise AttributeError()
+
+        assert self.engine is not None
+        assert self.engine.stdin is not None
+
+        self.engine.stdin.write(cmd.encode("cp932"))
+        self.engine.stdin.flush()
 
         value = None
         while True:
@@ -137,39 +148,40 @@ class Engine:
             if out == "":
                 raise EOFError()
             elif out.split(" ")[0] == "info":
-                out = out.split(" ")
-                for i in range(len(out)):
-                    if out[i] == "cp":
-                        value = int(out[i + 1])
+                out_list = out.split(" ")
+                for i in range(len(out_list)):
+                    if out_list[i] == "cp":
+                        value = int(out_list[i + 1])
                         break
             elif out.split(" ")[0] == "bestmove":
                 return (out.split(" ")[1], value)
 
-    def stop(self):
+    def stop(self) -> None:
         print("can not use command")
 
-    def ponderhit(self):
+    def ponderhit(self) -> None:
         print("can not use command")
 
-    def quit(self, verbose: bool = False):
+    def quit(self, verbose: bool = False) -> None:
         cmd = "quit\n"
         if verbose:
             print(f"In: {cmd}")
-        if self.engine is not None and self.engine.stdin is not None:
-            self.engine.stdin.write(cmd.encode("cp932"))
-            self.engine.stdin.flush()
-        else:
-            raise AttributeError()
+
+        assert self.engine is not None
+        assert self.engine.stdin is not None
+
+        self.engine.stdin.write(cmd.encode("cp932"))
+        self.engine.stdin.flush()
 
         self.engine.wait()
         self.engine = None
         self.name = None
         self.author = None
 
-    def gameover(self):
+    def gameover(self) -> None:
         print("can not use command")
 
-    def extra_load(self, path: str, verbose: bool = False):
+    def extra_load(self, path: str, verbose: bool = False) -> None:
         cmd = f"extra load {path}\n"
         if verbose:
             print(f"In: {cmd}")
@@ -179,7 +191,7 @@ class Engine:
         else:
             raise AttributeError()
 
-    def extra_save(self, path: str, verbose: bool = False):
+    def extra_save(self, path: str, verbose: bool = False) -> None:
         cmd = f"extra save {path}\n"
         if verbose:
             print(f"In: {cmd}")
@@ -189,7 +201,7 @@ class Engine:
         else:
             raise AttributeError()
 
-    def extra_make(self, sfen: str, verbose: bool = False):
+    def extra_make(self, sfen: str, verbose: bool = False) -> typing.Any:
         cmd = f"extra make {sfen}\n"
         if verbose:
             print(f"In: {cmd}")
@@ -209,7 +221,7 @@ class Engine:
 
         return out
 
-    def extra_entry(self, sfen: str, winner: str, verbose: bool = False):
+    def extra_entry(self, sfen: str, winner: str, verbose: bool = False) -> None:
         cmd = f"extra entry {sfen} {winner}\n"
         if verbose:
             print(f"In: {cmd}")
@@ -225,7 +237,7 @@ def main(
     target_engine_path: typing.List[str],
     choice_weights: typing.List[float],
     games: int,
-):
+) -> None:
     # 学習対象のエンジンの起動
     train_engine = Engine(path=train_engine_path)
     train_engine.usi(verbose=False)
@@ -262,7 +274,7 @@ def main(
         target_engine = random.choices(target_engine_list, weights=choice_weights, k=1)[
             0
         ]
-        board: typing.Any = cshogi.Board()  # type:ignore
+        board: typing.Any = cshogi.Board()
         moves = ""
         winner = ""
         make = True

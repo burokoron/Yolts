@@ -4,7 +4,7 @@ import typing
 import matplotlib.pyplot as plt
 
 
-def main(eval_file_path: str):
+def main(eval_file_path: str) -> None:
     with open(eval_file_path, "r") as f:
         eval_dict = json.load(f)
     ax_list: typing.List[typing.Any] = []
@@ -30,8 +30,8 @@ def main(eval_file_path: str):
         ax_list[-1].set_title(titles[i - 1])
 
     for p in eval_dict["pieces_dict"]["0"]:
-        v = 0
-        ig = 0
+        v = 0.0
+        ig = 0.0
         score = [[0] * 9 for _ in range(9)]
         for sq in eval_dict["pieces_dict"]:
             if eval_dict["pieces_dict"][sq][p] == 0:
