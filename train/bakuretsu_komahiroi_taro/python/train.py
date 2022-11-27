@@ -1,13 +1,13 @@
+import json
 import os
 import pickle
 import typing
-import json
 
 import cshogi
 import numpy as np
-from tqdm import tqdm
 import tensorflow as tf
 import tensorflow.keras as keras
+from tqdm import tqdm
 
 
 class MakeFeatures:
@@ -23,7 +23,8 @@ class MakeFeatures:
                             idx += 1
 
     def sfen2features(
-            self, sfen: str, value: int, matting_value: int) -> typing.Tuple[typing.List[int], int]:
+        self, sfen: str, value: int, matting_value: int
+    ) -> typing.Tuple[typing.List[int], int]:
         board: typing.Any = cshogi.Board(sfen)
         bp, wp = board.pieces_in_hand
         pieces = board.pieces
@@ -70,7 +71,8 @@ class MakeFeatures:
         return features, value
 
     def sfen2features_reverse(
-            self, sfen: str, value: int, matting_value: int) -> typing.Tuple[typing.List[int], int]:
+        self, sfen: str, value: int, matting_value: int
+    ) -> typing.Tuple[typing.List[int], int]:
         board: typing.Any = cshogi.Board(sfen)
         bp, wp = board.pieces_in_hand
         pieces = board.pieces
@@ -129,14 +131,16 @@ def mlp() -> keras.models.Model:
         output_dim=1,
         embeddings_initializer=tf.keras.initializers.Zeros(),
         mask_zero=True,
-        input_length=95
+        input_length=95,
     )(inputs)
     outputs = tf.math.reduce_sum(input_tensor=x, axis=1)
 
     return keras.models.Model(inputs=inputs, outputs=outputs)
 
 
-def main(root_path: str, train_ratio: float, matting_value: int, value_scale: int) -> None:
+def main(
+    root_path: str, train_ratio: float, matting_value: int, value_scale: int
+) -> None:
     x_train: typing.Any = []
     y_train: typing.Any = []
     x_test: typing.Any = []
@@ -196,7 +200,7 @@ def main(root_path: str, train_ratio: float, matting_value: int, value_scale: in
     loss = tf.keras.losses.MeanSquaredError()
     metrics = tf.keras.metrics.MeanAbsoluteError()
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
-        monitor="loss", factor=0.2, patience=1,  verbose=1, min_lr=0.0
+        monitor="loss", factor=0.2, patience=1, verbose=1, min_lr=0.0
     )
     early_stop = tf.keras.callbacks.EarlyStopping(monitor="loss", patience=3)
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
@@ -207,7 +211,7 @@ def main(root_path: str, train_ratio: float, matting_value: int, value_scale: in
         epochs=1000,
         validation_data=(x_test, y_test),
         shuffle=False,
-        callbacks=[reduce_lr, early_stop]
+        callbacks=[reduce_lr, early_stop],
     )
     model.save("mlp")
 
@@ -230,5 +234,5 @@ if __name__ == "__main__":
         root_path=root_path,
         train_ratio=train_ratio,
         matting_value=matting_value,
-        value_scale=value_scale
+        value_scale=value_scale,
     )
