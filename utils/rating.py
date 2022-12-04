@@ -49,11 +49,11 @@ if __name__ == "__main__":
                 "GSE 0.1.6": 0.014,
                 "LesserKai": 0.0,
             },
-            "rating": 112,
+            "rating": 127,
         },
         "十六式いろは SDT4": {
             "opponent": {},
-            "rating": 196,
+            "rating": 215,
         },
         "爆裂駒捨太郎 V 1.0.0": {
             "opponent": {
@@ -62,7 +62,7 @@ if __name__ == "__main__":
                 "GSE 0.1.6": 0.008,
                 "LesserKai": 0.001,
             },
-            "rating": 308,
+            "rating": 321,
         },
         "爆裂駒捨太郎 V 1.1.0": {
             "opponent": {
@@ -73,11 +73,11 @@ if __name__ == "__main__":
                 "LesserKai": 0.0,
                 "Bonanza 6.0 D1": 0,
             },
-            "rating": 425,
+            "rating": 437,
         },
         "GSE 0.1.6": {
             "opponent": {},
-            "rating": 426,
+            "rating": 437,
         },
         "爆裂駒捨太郎 V 2.0.0": {
             "opponent": {
@@ -89,7 +89,7 @@ if __name__ == "__main__":
                 "LesserKai": 0.004,
                 "Bonanza 6.0 D1": 0.003,
             },
-            "rating": 504,
+            "rating": 516,
         },
         "爆裂駒捨太郎 V 2.1.0": {
             "opponent": {
@@ -103,7 +103,7 @@ if __name__ == "__main__":
                 "Bonanza 6.0 D1": 0.004,
                 "Bonanza 6.0 D2": 0.0,
             },
-            "rating": 584,
+            "rating": 595,
         },
         "爆裂駒捨太郎 V 2.2.0": {
             "opponent": {
@@ -118,7 +118,7 @@ if __name__ == "__main__":
                 "Bonanza 6.0 D1": 0.011,
                 "Bonanza 6.0 D2": 0.0,
             },
-            "rating": 639,
+            "rating": 650,
         },
         "爆裂駒捨太郎 V 2.3.0": {
             "opponent": {
@@ -134,7 +134,7 @@ if __name__ == "__main__":
                 "Bonanza 6.0 D1": 0.012,
                 "Bonanza 6.0 D2": 0.002,
             },
-            "rating": 701,
+            "rating": 712,
         },
         "爆裂駒捨太郎R V 1.0.0": {
             "opponent": {
@@ -152,23 +152,76 @@ if __name__ == "__main__":
                 "Bonanza 6.0 D2": 0.015,
                 "技巧2 D1": 0.005,
             },
-            "rating": 744,
+            "rating": 754,
         },
         "LesserKai": {
             "opponent": {},
-            "rating": 772,
+            "rating": 779,
+        },
+        "爆裂転生太郎 V 1.0.1": {
+            "opponent": {
+                "十六式いろは SDT4": 1.0,
+                "爆裂駒捨太郎 V 1.0.0": 1.0,
+                "爆裂駒捨太郎 V 1.1.0": 1.0,
+                "GSE 0.1.6": 0.495,
+                "爆裂駒捨太郎 V 2.0.0": 1.0,
+                "爆裂駒捨太郎 V 2.1.0": 0.998,
+                "爆裂駒捨太郎 V 2.2.0": 0.979,
+                "爆裂駒捨太郎 V 2.3.0": 0.947,
+                "爆裂駒捨太郎R V 1.0.0": 0.953,
+                "LesserKai": 0.537,
+                "Bonanza 6.0 D1": 0.109,
+                "Bonanza 6.0 D2": 0.056,
+                "技巧2 D1": 0.022,
+                "Bonanza 6.0 D3": 0.014,
+                "海底 WCSC28": 0.003,
+            },
+            "rating": 931,
+        },
+        "爆裂転生太郎 V 2.0.2": {
+            "opponent": {
+                "爆裂駒捨太郎 V 1.0.0": 1.0,
+                "爆裂駒捨太郎 V 1.1.0": 1.0,
+                "GSE 0.1.6": 0.635,
+                "爆裂駒捨太郎 V 2.0.0": 0.998,
+                "爆裂駒捨太郎 V 2.1.0": 1.0,
+                "爆裂駒捨太郎 V 2.2.0": 1.0,
+                "爆裂駒捨太郎 V 2.3.0": 0.974,
+                "爆裂駒捨太郎R V 1.0.0": 0.972,
+                "LesserKai": 0.629,
+                "爆裂転生太郎 V 1.0.1": 0.829,
+                "Bonanza 6.0 D1": 0.252,
+                "Bonanza 6.0 D2": 0.060,
+                "技巧2 D1": 0.027,
+                "Bonanza 6.0 D3": 0.015,
+                "海底 WCSC28": 0.005,
+                "Bonanza 6.0 D4": 0.002,
+            },
+            "rating": 0,
         },
         "Bonanza 6.0 D1": {
             "opponent": {},
-            "rating": 1101,
+            "rating": 1109,
         },
         "Bonanza 6.0 D2": {
             "opponent": {},
-            "rating": 1325,
+            "rating": 1326,
         },
         "技巧2 D1": {
             "opponent": {},
-            "rating": 1544,
+            "rating": 1545,
+        },
+        "Bonanza 6.0 D3": {
+            "opponent": {},
+            "rating": 1562,
+        },
+        "海底 WCSC28": {
+            "opponent": {},
+            "rating": 1619,
+        },
+        "Bonanza 6.0 D4": {
+            "opponent": {},
+            "rating": 1793,
         },
     }
 
