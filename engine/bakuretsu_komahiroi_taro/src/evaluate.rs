@@ -63,7 +63,6 @@ impl Evaluate {
         //!   - value: i32
         //!     - 評価値
 
-        /*
         let bking_sq = if let Some(bking_sq) = pos.king_position(Color::Black) {
             bking_sq.array_index()
         } else {
@@ -74,15 +73,15 @@ impl Evaluate {
         } else {
             panic!("Not found white king.");
         };
-        let turn = pos.side_to_move().array_index();
-        */
+        // let turn = pos.side_to_move().array_index();
 
         let mut value = 0.;
 
         for sq in Square::all() {
             let pc = pos.piece_at(sq);
             if let Some(ref pc) = pc {
-                value += self.model[0][0][0][sq.array_index()][pc.as_u8() as usize];
+                value += self.model[0][bking_sq % 9 / 3][wking_sq % 9 / 3][sq.array_index()]
+                    [pc.as_u8() as usize];
             } else {
                 value += self.model[0][0][0][0][0];
             }
@@ -97,7 +96,7 @@ impl Evaluate {
                 }
                 let count = hand.Hand_count(piece_type) as usize;
                 if count != 0 {
-                    value += self.model[0][0][0][idx][count];
+                    value += self.model[0][bking_sq % 9 / 3][wking_sq % 9 / 3][idx][count];
                 } else {
                     value += self.model[0][0][0][0][0];
                 }

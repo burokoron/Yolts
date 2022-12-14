@@ -29,8 +29,8 @@ class MakeFeatures:
         bp, wp = board.pieces_in_hand
         pieces = board.pieces
         features: typing.List[int] = []
-        # bking_pos = None
-        # wking_pos = None
+        bking_pos = None
+        wking_pos = None
         for i in range(len(pieces)):
             if pieces[i] == 5:
                 pieces[i] = 6
@@ -45,26 +45,40 @@ class MakeFeatures:
             elif pieces[i] == 23:
                 pieces[i] = 21
 
-            # if pieces[i] == 8:
-            #     bking_pos = i
-            # elif pieces[i] == 24:
-            #     wking_pos = i
+            if pieces[i] == 8:
+                bking_pos = i
+            elif pieces[i] == 24:
+                wking_pos = i
 
+        assert bking_pos is not None
+        assert wking_pos is not None
         for i in range(len(pieces)):
             if pieces[i] == 0:
                 features.append(0)
             else:
-                features.append(self.features_table[0][0][0][i][pieces[i]])
+                features.append(
+                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][i][
+                        pieces[i]
+                    ]
+                )
         for i in range(len(bp)):
             if bp[i] == 0:
                 features.append(0)
             else:
-                features.append(self.features_table[0][0][0][81 + i][bp[i]])
+                features.append(
+                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][
+                        81 + i
+                    ][bp[i]]
+                )
         for i in range(len(wp)):
             if wp[i] == 0:
                 features.append(0)
             else:
-                features.append(self.features_table[0][0][0][88 + i][wp[i]])
+                features.append(
+                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][
+                        88 + i
+                    ][wp[i]]
+                )
 
         value = min([max([value, -matting_value]), matting_value])
 
@@ -77,8 +91,8 @@ class MakeFeatures:
         bp, wp = board.pieces_in_hand
         pieces = board.pieces
         features: typing.List[int] = []
-        # bking_pos = None
-        # wking_pos = None
+        bking_pos = None
+        wking_pos = None
         for i in range(len(pieces) - 1, -1, -1):
             if pieces[i] == 5:
                 pieces[i] = 6
@@ -98,26 +112,40 @@ class MakeFeatures:
             elif 17 <= pieces[i]:
                 pieces[i] -= 16
 
-            # if pieces[i] == 8:
-            #     bking_pos = i
-            # elif pieces[i] == 24:
-            #     wking_pos = i
+            if pieces[i] == 8:
+                bking_pos = i
+            elif pieces[i] == 24:
+                wking_pos = i
 
+        assert bking_pos is not None
+        assert wking_pos is not None
         for i in range(len(pieces) - 1, -1, -1):
             if pieces[i] == 0:
                 features.append(0)
             else:
-                features.append(self.features_table[0][0][0][i][pieces[i]])
+                features.append(
+                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][i][
+                        pieces[i]
+                    ]
+                )
         for i in range(len(wp)):
             if wp[i] == 0:
                 features.append(0)
             else:
-                features.append(self.features_table[0][0][0][81 + i][wp[i]])
+                features.append(
+                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][
+                        81 + i
+                    ][wp[i]]
+                )
         for i in range(len(bp)):
             if bp[i] == 0:
                 features.append(0)
             else:
-                features.append(self.features_table[0][0][0][88 + i][bp[i]])
+                features.append(
+                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][
+                        88 + i
+                    ][bp[i]]
+                )
 
         value = min([max([-value, -matting_value]), matting_value])
 
