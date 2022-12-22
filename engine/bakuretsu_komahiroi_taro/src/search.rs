@@ -49,6 +49,9 @@ impl NegaAlpha<'_> {
             return MATING_VALUE - pos.ply() as i32;
         }
 
+        // 局面評価回数+1
+        self.num_searched += 1;
+
         // 通常の評価
         let value = self.eval.inference(pos);
 
@@ -58,6 +61,77 @@ impl NegaAlpha<'_> {
         } else {
             -value
         }
+    }
+
+    fn quiescence_search(
+        &mut self,
+        pos: &mut Position,
+        depth: u32,
+        mut alpha: i32,
+        beta: i32,
+    ) -> i32 {
+        // 最大手数の計算
+        if self.max_board_number < pos.ply() {
+            self.max_board_number = pos.ply();
+        }
+
+        // 時間制限なら
+        let end = self.start_time.elapsed();
+        let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
+        if elapsed_time >= self.max_time {
+            return alpha;
+        }
+
+        let value = self.evaluate(pos);
+
+        if alpha < value {
+            alpha = value;
+        }
+        if beta <= alpha {
+            return alpha;
+        }
+
+        if depth == 0 {
+            return alpha;
+        }
+
+        // 全合法手検索
+        let legal_moves = pos.legal_moves();
+        // 合法手なしなら
+        if legal_moves.is_empty() {
+            return -MATING_VALUE + pos.ply() as i32;
+        }
+
+        // 王手がかかっているかどうか
+        let is_check = pos.in_check();
+
+        for m in legal_moves {
+            // 駒取りかどうか
+            let is_capture = match m {
+                Move::Normal {
+                    from: _,
+                    to,
+                    promote: _,
+                } => pos.piece_at(to).is_some(),
+                Move::Drop { piece: _, to: _ } => false,
+            };
+
+            // 王手がかかっているもしくは駒取りなら探索
+            if is_check || is_capture {
+                pos.do_move(m);
+                let value = -self.quiescence_search(pos, depth - 1, -beta, -alpha);
+                pos.undo_move(m);
+
+                if alpha < value {
+                    alpha = value;
+                }
+                if beta <= alpha {
+                    return alpha;
+                }
+            }
+        }
+
+        alpha
     }
 
     pub fn search(
@@ -84,9 +158,6 @@ impl NegaAlpha<'_> {
         //! - Returns
         //!   - value: i32
         //!     - 評価値
-
-        // 探索局面数
-        self.num_searched += 1;
 
         // 最大手数の計算
         if self.max_board_number < pos.ply() {
@@ -130,7 +201,7 @@ impl NegaAlpha<'_> {
 
         // 探索深さ制限なら
         if depth == 0 {
-            return self.evaluate(pos);
+            return self.quiescence_search(pos, 3, alpha, beta);
         }
 
         // Mate Distance Pruning
