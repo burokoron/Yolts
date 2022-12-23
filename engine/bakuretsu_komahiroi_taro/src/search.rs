@@ -19,6 +19,7 @@ pub struct HashTable {
 
 pub struct MoveOrdering {
     pub piece_to_history: Vec<Vec<Vec<i64>>>,
+    pub killer_heuristic: Vec<Vec<Option<Move>>>,
 }
 
 pub struct NegaAlpha<'a> {
@@ -247,6 +248,21 @@ impl NegaAlpha<'_> {
                     value += 100000;
                 }
             }
+            // Killer Heuristic
+            if let Some(killer_move) =
+                self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]
+            {
+                if killer_move == m {
+                    value += 10000;
+                }
+            }
+            if let Some(killer_move) =
+                self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][1]
+            {
+                if killer_move == m {
+                    value += 9000;
+                }
+            }
             // Piece To History
             let turn = pos.side_to_move().array_index();
             let piece = match m {
@@ -278,6 +294,22 @@ impl NegaAlpha<'_> {
             }
             pos.undo_move(m.0);
             if best_value >= beta {
+                // Killer Heuristic
+                if self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]
+                    .is_none()
+                {
+                    self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0] =
+                        Some(m.0);
+                } else if let Some(first_killer) =
+                    self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]
+                {
+                    if first_killer != m.0 {
+                        self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][1] =
+                            Some(m.0);
+                        self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize]
+                            .swap(0, 1);
+                    }
+                }
                 // Piece To History
                 let turn = pos.side_to_move().array_index();
                 let piece = match m.0 {

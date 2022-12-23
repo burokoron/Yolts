@@ -242,6 +242,7 @@ impl BakuretsuKomahiroiTaro {
                 },
                 move_ordering: search::MoveOrdering {
                     piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
+                    killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
                 },
             }
         } else {
