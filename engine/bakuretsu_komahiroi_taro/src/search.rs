@@ -106,29 +106,50 @@ impl NegaAlpha<'_> {
         // 王手がかかっているかどうか
         let is_check = pos.in_check();
 
+        // ムーブオーダリング
+        let mut move_list: Vec<(Move, i64)> = Vec::new();
+        // ムーブオーダリング用の重み計算
         for m in legal_moves {
-            // 駒取りかどうか
-            let is_capture = match m {
-                Move::Normal {
-                    from: _,
-                    to,
-                    promote: _,
-                } => pos.piece_at(to).is_some(),
-                Move::Drop { piece: _, to: _ } => false,
-            };
+            let mut value = 0;
+            if let Move::Normal {
+                from,
+                to,
+                promote: _,
+            } = m
+            {
+                // MVV-LVA
+                if let Some(p) = pos.piece_at(to) {
+                    let mut idx = p.piece_kind().array_index();
+                    if idx > 8 {
+                        idx -= 8;
+                    }
+                    value += idx as i64 * 10;
 
-            // 王手がかかっているもしくは駒取りなら探索
-            if is_check || is_capture {
-                pos.do_move(m);
-                let value = -self.quiescence_search(pos, depth - 1, -beta, -alpha);
-                pos.undo_move(m);
+                    if let Some(p) = pos.piece_at(from) {
+                        let mut idx = p.piece_kind().array_index();
+                        if idx > 8 {
+                            idx -= 8;
+                        }
+                        value += 9 - idx as i64;
+                    }
+                }
+            }
+            if is_check || value > 0 {
+                move_list.push((m, value));
+            }
+        }
+        move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
 
-                if alpha < value {
-                    alpha = value;
-                }
-                if beta <= alpha {
-                    return alpha;
-                }
+        for m in move_list {
+            pos.do_move(m.0);
+            let value = -self.quiescence_search(pos, depth - 1, -beta, -alpha);
+            pos.undo_move(m.0);
+
+            if alpha < value {
+                alpha = value;
+            }
+            if beta <= alpha {
+                return alpha;
             }
         }
 
