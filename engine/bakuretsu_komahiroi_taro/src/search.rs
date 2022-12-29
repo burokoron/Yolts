@@ -284,6 +284,29 @@ impl NegaAlpha<'_> {
                     value += 9000;
                 }
             }
+            if let Move::Normal {
+                from,
+                to,
+                promote: _,
+            } = m
+            {
+                // MVV-LVA
+                if let Some(p) = pos.piece_at(to) {
+                    let mut idx = p.piece_kind().array_index();
+                    if idx > 8 {
+                        idx -= 8;
+                    }
+                    value += idx as i64 * 10;
+
+                    if let Some(p) = pos.piece_at(from) {
+                        let mut idx = p.piece_kind().array_index();
+                        if idx > 8 {
+                            idx -= 8;
+                        }
+                        value += 9 - idx as i64;
+                    }
+                }
+            }
             // Piece To History
             let turn = pos.side_to_move().array_index();
             let piece = match m {
