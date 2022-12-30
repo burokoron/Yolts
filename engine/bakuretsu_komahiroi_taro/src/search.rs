@@ -19,6 +19,7 @@ pub struct HashTable {
 
 pub struct MoveOrdering {
     pub piece_to_history: Vec<Vec<Vec<i64>>>,
+    pub killer_heuristic: Vec<Vec<Option<Move>>>,
 }
 
 pub struct NegaAlpha<'a> {
@@ -49,6 +50,9 @@ impl NegaAlpha<'_> {
             return MATING_VALUE - pos.ply() as i32;
         }
 
+        // 局面評価回数+1
+        self.num_searched += 1;
+
         // 通常の評価
         let value = self.eval.inference(pos);
 
@@ -58,6 +62,98 @@ impl NegaAlpha<'_> {
         } else {
             -value
         }
+    }
+
+    fn quiescence_search(
+        &mut self,
+        pos: &mut Position,
+        depth: u32,
+        mut alpha: i32,
+        beta: i32,
+    ) -> i32 {
+        // 最大手数の計算
+        if self.max_board_number < pos.ply() {
+            self.max_board_number = pos.ply();
+        }
+
+        // 時間制限なら
+        let end = self.start_time.elapsed();
+        let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
+        if elapsed_time >= self.max_time {
+            return alpha;
+        }
+
+        let value = self.evaluate(pos);
+
+        if alpha < value {
+            alpha = value;
+        }
+        if beta <= alpha {
+            return alpha;
+        }
+
+        if depth == 0 {
+            return alpha;
+        }
+
+        // 全合法手検索
+        let legal_moves = pos.legal_moves();
+        // 合法手なしなら
+        if legal_moves.is_empty() {
+            return -MATING_VALUE + pos.ply() as i32;
+        }
+
+        // 王手がかかっているかどうか
+        let is_check = pos.in_check();
+
+        // ムーブオーダリング
+        let mut move_list: Vec<(Move, i64)> = Vec::new();
+        // ムーブオーダリング用の重み計算
+        for m in legal_moves {
+            let mut value = 0;
+            if let Move::Normal {
+                from,
+                to,
+                promote: _,
+            } = m
+            {
+                // MVV-LVA
+                if let Some(p) = pos.piece_at(to) {
+                    let mut idx = p.piece_kind().array_index();
+                    if idx > 8 {
+                        idx -= 8;
+                    }
+                    value += idx as i64 * 10;
+
+                    if let Some(p) = pos.piece_at(from) {
+                        let mut idx = p.piece_kind().array_index();
+                        if idx > 8 {
+                            idx -= 8;
+                        }
+                        value += 9 - idx as i64;
+                    }
+                }
+            }
+            if is_check || value > 0 {
+                move_list.push((m, value));
+            }
+        }
+        move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
+
+        for m in move_list {
+            pos.do_move(m.0);
+            let value = -self.quiescence_search(pos, depth - 1, -beta, -alpha);
+            pos.undo_move(m.0);
+
+            if alpha < value {
+                alpha = value;
+            }
+            if beta <= alpha {
+                return alpha;
+            }
+        }
+
+        alpha
     }
 
     pub fn search(
@@ -84,9 +180,6 @@ impl NegaAlpha<'_> {
         //! - Returns
         //!   - value: i32
         //!     - 評価値
-
-        // 探索局面数
-        self.num_searched += 1;
 
         // 最大手数の計算
         if self.max_board_number < pos.ply() {
@@ -130,7 +223,7 @@ impl NegaAlpha<'_> {
 
         // 探索深さ制限なら
         if depth == 0 {
-            return self.evaluate(pos);
+            return self.quiescence_search(pos, 3, alpha, beta);
         }
 
         // Mate Distance Pruning
@@ -176,6 +269,44 @@ impl NegaAlpha<'_> {
                     value += 100000;
                 }
             }
+            // Killer Heuristic
+            if let Some(killer_move) =
+                self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]
+            {
+                if killer_move == m {
+                    value += 10000;
+                }
+            }
+            if let Some(killer_move) =
+                self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][1]
+            {
+                if killer_move == m {
+                    value += 9000;
+                }
+            }
+            if let Move::Normal {
+                from,
+                to,
+                promote: _,
+            } = m
+            {
+                // MVV-LVA
+                if let Some(p) = pos.piece_at(to) {
+                    let mut idx = p.piece_kind().array_index();
+                    if idx > 8 {
+                        idx -= 8;
+                    }
+                    value += idx as i64 * 10;
+
+                    if let Some(p) = pos.piece_at(from) {
+                        let mut idx = p.piece_kind().array_index();
+                        if idx > 8 {
+                            idx -= 8;
+                        }
+                        value += 9 - idx as i64;
+                    }
+                }
+            }
             // Piece To History
             let turn = pos.side_to_move().array_index();
             let piece = match m {
@@ -207,6 +338,22 @@ impl NegaAlpha<'_> {
             }
             pos.undo_move(m.0);
             if best_value >= beta {
+                // Killer Heuristic
+                if self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]
+                    .is_none()
+                {
+                    self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0] =
+                        Some(m.0);
+                } else if let Some(first_killer) =
+                    self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]
+                {
+                    if first_killer != m.0 {
+                        self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][1] =
+                            Some(m.0);
+                        self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize]
+                            .swap(0, 1);
+                    }
+                }
                 // Piece To History
                 let turn = pos.side_to_move().array_index();
                 let piece = match m.0 {
