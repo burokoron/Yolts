@@ -117,8 +117,8 @@ class Engine:
         winc: int = -1,
         verbose: bool = False,
     ) -> typing.Tuple[
-            str, typing.Union[int, None], typing.Union[int, None], typing.Union[int, None]
-            ]:
+        str, typing.Union[int, None], typing.Union[int, None], typing.Union[int, None]
+    ]:
         cmd = f"go btime {btime} wtime {wtime} "
         if byoyomi >= 0:
             cmd += f"byoyomi {byoyomi}\n"

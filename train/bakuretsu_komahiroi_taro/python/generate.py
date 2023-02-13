@@ -379,7 +379,8 @@ def main(
     print(game_results)
     date = datetime.datetime.today()
     with open(
-        f"sfen_{date.year:04}{date.month:02}{date.day:02}{date.hour:02}{date.minute:02}.pkl", "wb"
+        f"sfen_{date.year:04}{date.month:02}{date.day:02}{date.hour:02}{date.minute:02}.pkl",
+        "wb",
     ) as f:
         pickle.dump(game_sfen, f)
 
@@ -393,7 +394,13 @@ if __name__ == "__main__":
         "path4",
         "path5",
     ]
-    choice_weights = [1 / 0.935, 1 / 0.846, 1 / 0.824, 1 / 0.898, 1 / 0.362]  # 仮想敵のエンジンの選択重み
+    choice_weights = [
+        1 / 0.935,
+        1 / 0.846,
+        1 / 0.824,
+        1 / 0.898,
+        1 / 0.362,
+    ]  # 仮想敵のエンジンの選択重み
     games = 1000  # 対局数
 
     main(

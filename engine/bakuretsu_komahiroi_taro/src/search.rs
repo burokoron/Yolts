@@ -71,6 +71,21 @@ impl NegaAlpha<'_> {
         mut alpha: i32,
         beta: i32,
     ) -> i32 {
+        //! 静止探索
+        //!
+        //! - Arguments
+        //!   - pos: &mut Position
+        //!     - 静止探索する局面
+        //!   - depth: u32
+        //!     - 残り探索深さ
+        //!   - mut alpha: i32
+        //!     - アルファ値
+        //!   - beta: i32
+        //!     - ベータ値
+        //! - Returns
+        //!   - value: i32
+        //!     - 評価値
+
         // 最大手数の計算
         if self.max_board_number < pos.ply() {
             self.max_board_number = pos.ply();
