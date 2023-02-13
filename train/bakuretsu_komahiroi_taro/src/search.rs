@@ -23,12 +23,14 @@ pub struct MoveOrdering {
 }
 
 pub struct NegaAlpha<'a> {
+    pub my_turn: Color,
     pub start_time: std::time::Instant,
     pub max_time: i32,
     pub num_searched: u64,
     pub max_depth: u32,
     pub max_board_number: u16,
     pub best_move_pv: Option<Move>,
+    pub is_eval_nyugyoku: bool,
     pub eval: &'a Evaluate,
     pub hash_table: HashTable,
     pub move_ordering: MoveOrdering,
@@ -53,8 +55,95 @@ impl NegaAlpha<'_> {
         // 局面評価回数+1
         self.num_searched += 1;
 
-        // 通常の評価
-        let value = self.eval.inference(pos);
+        let value = if self.is_eval_nyugyoku {
+            // 入玉用の評価
+            let mut value = 0;
+            for sq in Square::all() {
+                let pc = pos.piece_at(sq);
+                if let Some(pc) = pc {
+                    match pc {
+                        Piece::B_P
+                        | Piece::B_L
+                        | Piece::B_N
+                        | Piece::B_S
+                        | Piece::B_G
+                        | Piece::B_PP
+                        | Piece::B_PL
+                        | Piece::B_PN
+                        | Piece::B_PS => {
+                            value += 100;
+                            value += 10 - sq.rank() as i32;
+                        }
+                        Piece::B_B | Piece::B_R | Piece::B_PB | Piece::B_PR => {
+                            value += 500;
+                            value += 10 - sq.rank() as i32;
+                        }
+                        Piece::B_K => {
+                            value += 10 - sq.rank() as i32 * 2;
+                        }
+                        Piece::W_P
+                        | Piece::W_L
+                        | Piece::W_N
+                        | Piece::W_S
+                        | Piece::W_G
+                        | Piece::W_PP
+                        | Piece::W_PL
+                        | Piece::W_PN
+                        | Piece::W_PS => {
+                            value -= 100;
+                            value -= sq.rank() as i32;
+                        }
+                        Piece::W_B | Piece::W_R | Piece::W_PB | Piece::W_PR => {
+                            value -= 500;
+                            value -= sq.rank() as i32;
+                        }
+                        Piece::W_K => {
+                            value -= sq.rank() as i32 * 2;
+                        }
+                        _ => unreachable!("Unrecognizable piece types."),
+                    }
+                }
+            }
+            let hand = pos.hand(Color::Black);
+            for piece_type in PieceKind::all() {
+                if piece_type == PieceKind::King {
+                    break;
+                }
+                match piece_type {
+                    PieceKind::Pawn
+                    | PieceKind::Lance
+                    | PieceKind::Knight
+                    | PieceKind::Silver
+                    | PieceKind::Gold => value += hand.Hand_count(piece_type) as i32 * 100,
+                    PieceKind::Bishop | PieceKind::Rook => {
+                        value += hand.Hand_count(piece_type) as i32 * 500
+                    }
+                    _ => unreachable!("Unrecognizable piece types."),
+                }
+            }
+            let hand = pos.hand(Color::White);
+            for piece_type in PieceKind::all() {
+                if piece_type == PieceKind::King {
+                    break;
+                }
+                match piece_type {
+                    PieceKind::Pawn
+                    | PieceKind::Lance
+                    | PieceKind::Knight
+                    | PieceKind::Silver
+                    | PieceKind::Gold => value -= hand.Hand_count(piece_type) as i32 * 100,
+                    PieceKind::Bishop | PieceKind::Rook => {
+                        value -= hand.Hand_count(piece_type) as i32 * 500
+                    }
+                    _ => unreachable!("Unrecognizable piece types."),
+                }
+            }
+
+            value
+        } else {
+            // 通常の評価
+            self.eval.inference(pos)
+        };
 
         // 後手番なら評価値反転
         if pos.side_to_move() == Color::Black {
@@ -115,7 +204,11 @@ impl NegaAlpha<'_> {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            return -MATING_VALUE + pos.ply() as i32;
+            if pos.side_to_move() == self.my_turn {
+                return -MATING_VALUE + pos.ply() as i32;
+            } else {
+                return MATING_VALUE - pos.ply() as i32;
+            }
         }
 
         // 王手がかかっているかどうか
@@ -269,7 +362,11 @@ impl NegaAlpha<'_> {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            return -MATING_VALUE + pos.ply() as i32;
+            if pos.side_to_move() == self.my_turn {
+                return -MATING_VALUE + pos.ply() as i32;
+            } else {
+                return MATING_VALUE - pos.ply() as i32;
+            }
         }
 
         // ムーブオーダリング
