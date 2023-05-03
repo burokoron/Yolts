@@ -251,7 +251,7 @@ impl BakuretsuKomahiroiTaro {
             panic!("Cannot load evaluate model.");
         };
         let value = nega.search(pos, position_history, 0, -MATING_VALUE, MATING_VALUE);
-        nega.is_eval_nyugyoku = value > 3500;
+        nega.is_eval_nyugyoku = value > 5000;
 
         // 入玉宣言の確認
         if search::is_nyugyoku_win(pos) {
@@ -264,7 +264,7 @@ impl BakuretsuKomahiroiTaro {
             nega.max_depth = depth;
             let mut value = nega.search(pos, position_history, depth, -MATING_VALUE, MATING_VALUE);
             if nega.is_eval_nyugyoku && value.abs() <= MATING_VALUE - 1000 {
-                value = (value as f32 * (8857.0 / 5676.0)) as i32;
+                value = (value as f32 * (13544.0 / 5676.0)) as i32;
             }
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
