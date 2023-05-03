@@ -12,7 +12,7 @@ on:
 jobs:
   format-check:
 
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
