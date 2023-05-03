@@ -3,17 +3,17 @@ import datetime
 import os
 import pickle
 import subprocess
-import typing
 import threading
 import time
+import typing
 
 import cshogi
 from rich import color
 from rich.progress import Progress, TaskID
 
-
 game_results: typing.Dict[str, typing.Dict[str, int]]
 game_sfen: typing.Dict[int, typing.Dict[str, typing.List[typing.Union[int, str, None]]]]
+game_idx: int
 target_engine_path2name: typing.Dict[str, str]
 
 
@@ -241,12 +241,12 @@ class Engine:
 
 
 def generate(
-        lock: threading.Lock,
-        book_engine: Engine,
-        train_engine_path: str,
-        target_engine_path: str,
-        games: int
-):
+    lock: threading.Lock,
+    book_engine: Engine,
+    train_engine_path: str,
+    target_engine_path: str,
+    games: int,
+) -> None:
     # 学習対象のエンジンの起動
     train_engine = Engine(path=train_engine_path)
     train_engine.usi(verbose=True)
@@ -386,10 +386,8 @@ def generate(
 
 
 def ganerete_progress(
-        target_engine_path: typing.List[str],
-        choice_weights: typing.List[float],
-        games: int
-):
+    target_engine_path: typing.List[str], choice_weights: typing.List[float], games: int
+) -> None:
     global game_results
     global target_engine_path2name
 
@@ -402,10 +400,12 @@ def ganerete_progress(
     game_progress: typing.Dict[str, int] = {}
     with Progress(auto_refresh=False) as progress:
         for i in range(len(target_engine_path)):
-            task_list.append(progress.add_task(
-                f"[{color_list[i]}]{target_engine_path2name[target_engine_path[i]]}",
-                total=int(choice_weights[i] / sum(choice_weights) * games)
-            ))
+            task_list.append(
+                progress.add_task(
+                    f"[{color_list[i]}]{target_engine_path2name[target_engine_path[i]]}",
+                    total=int(choice_weights[i] / sum(choice_weights) * games),
+                )
+            )
             game_progress[target_engine_path[i]] = 0
 
         while not progress.finished:
@@ -413,7 +413,9 @@ def ganerete_progress(
                 wins = game_results[target_engine_path[i]]["wins"]
                 loses = game_results[target_engine_path[i]]["loses"]
                 draw = game_results[target_engine_path[i]]["draw"]
-                advance = float(wins + loses + draw - game_progress[target_engine_path[i]])
+                advance = float(
+                    wins + loses + draw - game_progress[target_engine_path[i]]
+                )
                 progress.update(task_list[i], advance=advance)
                 game_progress[target_engine_path[i]] = wins + loses + draw
             progress.refresh()
@@ -454,8 +456,8 @@ def main(
                 book_engine,
                 train_engine_path,
                 target_engine_path[i],
-                int(choice_weights[i] / sum(choice_weights) * games)
-            ]
+                int(choice_weights[i] / sum(choice_weights) * games),
+            ],
         ).start()
     threading.Thread(
         target=ganerete_progress, args=[target_engine_path, choice_weights, games]

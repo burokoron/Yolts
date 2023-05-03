@@ -57,27 +57,21 @@ class MakeFeatures:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][i][
-                        pieces[i]
-                    ]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][i][pieces[i]]
                 )
         for i in range(len(bp)):
             if bp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][
-                        81 + i
-                    ][bp[i]]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][81 + i][bp[i]]
                 )
         for i in range(len(wp)):
             if wp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][
-                        88 + i
-                    ][wp[i]]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][88 + i][wp[i]]
                 )
 
         value = min([max([value, -matting_value]), matting_value])
@@ -124,27 +118,21 @@ class MakeFeatures:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][i][
-                        pieces[i]
-                    ]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][i][pieces[i]]
                 )
         for i in range(len(wp)):
             if wp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][
-                        81 + i
-                    ][wp[i]]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][81 + i][wp[i]]
                 )
         for i in range(len(bp)):
             if bp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][
-                        88 + i
-                    ][bp[i]]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][88 + i][bp[i]]
                 )
 
         value = min([max([-value, -matting_value]), matting_value])
