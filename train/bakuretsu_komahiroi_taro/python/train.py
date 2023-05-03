@@ -57,27 +57,21 @@ class MakeFeatures:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][i][
-                        pieces[i]
-                    ]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][i][pieces[i]]
                 )
         for i in range(len(bp)):
             if bp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][
-                        81 + i
-                    ][bp[i]]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][81 + i][bp[i]]
                 )
         for i in range(len(wp)):
             if wp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][
-                        88 + i
-                    ][wp[i]]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][88 + i][wp[i]]
                 )
 
         value = min([max([value, -matting_value]), matting_value])
@@ -124,27 +118,21 @@ class MakeFeatures:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][i][
-                        pieces[i]
-                    ]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][i][pieces[i]]
                 )
         for i in range(len(wp)):
             if wp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][
-                        81 + i
-                    ][wp[i]]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][81 + i][wp[i]]
                 )
         for i in range(len(bp)):
             if bp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9 // 3][wking_pos % 9 // 3][
-                        88 + i
-                    ][bp[i]]
+                    self.features_table[0][bking_pos % 9][wking_pos % 9][88 + i][bp[i]]
                 )
 
         value = min([max([-value, -matting_value]), matting_value])
@@ -177,12 +165,12 @@ def main(
 
     file_list = [file for file in os.listdir(root_path) if file.split(".")[-1] == "pkl"]
     mf = MakeFeatures()
-    for i, file in enumerate(file_list):
+    for i, file in enumerate(tqdm(file_list, desc="file")):
         if file.split(".")[-1] != "pkl":
             continue
         with open(file, "rb") as f:
             kifu_dict = pickle.load(f)
-        for key in tqdm(kifu_dict, desc="kifu"):
+        for key in tqdm(kifu_dict, desc="kifu", leave=False):
             moves = kifu_dict[key]["moves"]
             values = kifu_dict[key]["value"]
 
@@ -224,7 +212,7 @@ def main(
     # 学習
     model = mlp()
     model.summary()
-    optimizer = tf.keras.optimizers.Adam()
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.05)
     loss = tf.keras.losses.MeanSquaredError()
     metrics = tf.keras.metrics.MeanAbsoluteError()
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
@@ -235,7 +223,7 @@ def main(
     model.fit(
         x=x_train,
         y=y_train,
-        batch_size=4096,
+        batch_size=65535,
         epochs=1000,
         validation_data=(x_test, y_test),
         shuffle=False,
@@ -254,7 +242,7 @@ def main(
 
 if __name__ == "__main__":
     root_path = "./"  # 学習棋譜があるルートフォルダ
-    matting_value = 6842  # 勝ち(負け)を読み切ったときの評価値
+    matting_value = 13544  # 勝ち(負け)を読み切ったときの評価値
     value_scale = 512  # 学習時の評価値スケーリングパラメータ
     train_ratio = 0.9  # 学習に使用する棋譜ファイルの割合
 
