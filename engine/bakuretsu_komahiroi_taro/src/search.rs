@@ -175,6 +175,7 @@ impl NegaAlpha<'_> {
         &mut self,
         pos: &mut Position,
         position_history: &mut HashSet<u64>,
+        in_null_move: bool,
         depth: u32,
         mut alpha: i32,
         mut beta: i32,
@@ -186,6 +187,8 @@ impl NegaAlpha<'_> {
         //!     - 探索する局面
         //!   - position_history: &mut HashSet<u64>
         //!     - 局面の履歴
+        //!   - in_null_move: bool
+        //!     - null moveした直後かどうか
         //!   - depth: u32
         //!     - 残り探索深さ
         //!   - mut alpha: i32
@@ -265,6 +268,32 @@ impl NegaAlpha<'_> {
         }
         */
 
+        // Null Move Pruning
+        if depth != self.max_depth
+            && depth >= 2
+            && beta.abs() < MATING_VALUE - 1000
+            && !pos.in_check()
+            && !in_null_move
+        {
+            let value = self.evaluate(pos);
+            if value >= beta {
+                let reduce = 2;
+                pos.do_null_move();
+                let value = -self.search(
+                    pos,
+                    position_history,
+                    true,
+                    depth - reduce,
+                    -beta,
+                    -beta + 1,
+                );
+                pos.undo_null_move();
+                if value >= beta {
+                    return beta;
+                }
+            }
+        }
+
         // 全合法手検索
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
@@ -343,7 +372,7 @@ impl NegaAlpha<'_> {
         position_history.insert(pos.key());
         for m in move_list {
             pos.do_move(m.0);
-            let value = -self.search(pos, position_history, depth - 1, -beta, -best_value);
+            let value = -self.search(pos, position_history, false, depth - 1, -beta, -best_value);
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);

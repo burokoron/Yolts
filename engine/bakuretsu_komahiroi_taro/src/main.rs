@@ -258,7 +258,14 @@ impl BakuretsuKomahiroiTaro {
         let mut best_move = "resign".to_string();
         for depth in 1..=self.depth_limit {
             nega.max_depth = depth;
-            let value = nega.search(pos, position_history, depth, -MATING_VALUE, MATING_VALUE);
+            let value = nega.search(
+                pos,
+                position_history,
+                false,
+                depth,
+                -MATING_VALUE,
+                MATING_VALUE,
+            );
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
             let nps = if elapsed_time != 0 {
