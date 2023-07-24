@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+import shutil
 import typing
 
 import cshogi
@@ -52,26 +53,29 @@ class MakeFeatures:
 
         assert bking_pos is not None
         assert wking_pos is not None
+
+        bking_pos = bking_pos // 27 * 9 + bking_pos % 9
+        wking_pos = wking_pos // 27 * 9 + wking_pos % 9
         for i in range(len(pieces)):
             if pieces[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][i][pieces[i]]
+                    self.features_table[0][bking_pos][wking_pos][i][pieces[i]]
                 )
         for i in range(len(bp)):
             if bp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][81 + i][bp[i]]
+                    self.features_table[0][bking_pos][wking_pos][81 + i][bp[i]]
                 )
         for i in range(len(wp)):
             if wp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][88 + i][wp[i]]
+                    self.features_table[0][bking_pos][wking_pos][88 + i][wp[i]]
                 )
 
         value = min([max([value, -matting_value]), matting_value])
@@ -113,31 +117,141 @@ class MakeFeatures:
 
         assert bking_pos is not None
         assert wking_pos is not None
+
+        bking_pos = bking_pos // 27 * 9 + bking_pos % 9
+        wking_pos = wking_pos // 27 * 9 + wking_pos % 9
         for i in range(len(pieces) - 1, -1, -1):
             if pieces[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][i][pieces[i]]
+                    self.features_table[0][bking_pos][wking_pos][i][pieces[i]]
                 )
         for i in range(len(wp)):
             if wp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][81 + i][wp[i]]
+                    self.features_table[0][bking_pos][wking_pos][81 + i][wp[i]]
                 )
         for i in range(len(bp)):
             if bp[i] == 0:
                 features.append(0)
             else:
                 features.append(
-                    self.features_table[0][bking_pos % 9][wking_pos % 9][88 + i][bp[i]]
+                    self.features_table[0][bking_pos][wking_pos][88 + i][bp[i]]
                 )
 
         value = min([max([-value, -matting_value]), matting_value])
 
         return features, value
+
+    def flip_features(self, features: typing.List[int]) -> typing.List[int]:
+        outputs: typing.List[int] = []
+
+        for i in range(72, -1, -9):
+            for j in range(9):
+                outputs.append(features[i + j])
+        for i in range(81, 95):
+            outputs.append(features[i])
+
+        return features
+
+
+class TrainSequence(keras.utils.Sequence):  # type:ignore
+    def __init__(
+        self,
+        root_path: str,
+        train_file_number: int,
+        matting_value: int,
+        value_scale: int,
+    ):
+        self.mf = MakeFeatures()
+        self.root_path = root_path
+        self.train_file_number = train_file_number
+        self.matting_value = matting_value
+        self.value_scale = value_scale
+
+    def __len__(self) -> int:
+        return self.train_file_number
+
+    def __getitem__(self, idx: int) -> typing.Any:
+
+        batch_x: typing.Any = []
+        batch_y: typing.Any = []
+
+        with open(f"{self.root_path}/train_{idx}.pkl", "rb") as f:
+            x_train, y_train = pickle.load(f)
+        for (sfen, value) in zip(x_train, y_train):
+            x, y = self.mf.sfen2features(
+                sfen=sfen, value=value, matting_value=self.matting_value
+            )
+            batch_x.append(x)
+            batch_y.append(y)
+
+            x = self.mf.flip_features(x)
+            batch_x.append(x)
+            batch_y.append(y)
+
+            x, y = self.mf.sfen2features_reverse(
+                sfen=sfen, value=value, matting_value=self.matting_value
+            )
+            batch_x.append(x)
+            batch_y.append(y)
+
+            x = self.mf.flip_features(x)
+            batch_x.append(x)
+            batch_y.append(y)
+
+        return np.array(batch_x), np.array(batch_y) / self.value_scale
+
+
+class ValidationSequence(keras.utils.Sequence):  # type:ignore
+    def __init__(
+        self,
+        root_path: str,
+        test_file_number: int,
+        matting_value: int,
+        value_scale: int,
+    ):
+        self.mf = MakeFeatures()
+        self.root_path = root_path
+        self.test_file_number = test_file_number
+        self.matting_value = matting_value
+        self.value_scale = value_scale
+
+    def __len__(self) -> int:
+        return self.test_file_number
+
+    def __getitem__(self, idx: int) -> typing.Any:
+
+        batch_x: typing.Any = []
+        batch_y: typing.Any = []
+
+        with open(f"{self.root_path}/test_{idx}.pkl", "rb") as f:
+            x_test, y_test = pickle.load(f)
+        for (sfen, value) in zip(x_test, y_test):
+            x, y = self.mf.sfen2features(
+                sfen=sfen, value=value, matting_value=self.matting_value
+            )
+            batch_x.append(x)
+            batch_y.append(y)
+
+            x = self.mf.flip_features(x)
+            batch_x.append(x)
+            batch_y.append(y)
+
+            x, y = self.mf.sfen2features_reverse(
+                sfen=sfen, value=value, matting_value=self.matting_value
+            )
+            batch_x.append(x)
+            batch_y.append(y)
+
+            x = self.mf.flip_features(x)
+            batch_x.append(x)
+            batch_y.append(y)
+
+        return np.array(batch_x), np.array(batch_y) / self.value_scale
 
 
 def mlp() -> keras.models.Model:
@@ -155,7 +269,12 @@ def mlp() -> keras.models.Model:
 
 
 def main(
-    root_path: str, train_ratio: float, matting_value: int, value_scale: int
+    root_path: str,
+    tmp_path: str,
+    train_ratio: float,
+    matting_value: int,
+    value_scale: int,
+    batch_size: int,
 ) -> None:
     x_train: typing.Any = []
     y_train: typing.Any = []
@@ -164,11 +283,17 @@ def main(
     same_sfen: typing.Set[str] = set()
 
     file_list = [file for file in os.listdir(root_path) if file.split(".")[-1] == "pkl"]
-    mf = MakeFeatures()
+    x_train = []
+    y_train = []
+    x_test = []
+    y_test = []
+    train_file_number = 0
+    test_file_number = 0
+    os.mkdir(tmp_path)
     for i, file in enumerate(tqdm(file_list, desc="file")):
         if file.split(".")[-1] != "pkl":
             continue
-        with open(file, "rb") as f:
+        with open(f"{root_path}/{file}", "rb") as f:
             kifu_dict = pickle.load(f)
         for key in tqdm(kifu_dict, desc="kifu", leave=False):
             moves = kifu_dict[key]["moves"]
@@ -183,31 +308,47 @@ def main(
                         continue
                     else:
                         same_sfen.add(" ".join(sfen.split(" ")[:-1]))
-                    features, value = mf.sfen2features(
-                        sfen=sfen, value=value, matting_value=matting_value
-                    )
-                    if int(key) % 9 == 0:
-                        x_test.append(features)
+                    if int(key) % 10 == 0:
+                        x_test.append(sfen)
                         y_test.append(value)
                     elif i < int(len(file_list) * train_ratio):
-                        x_train.append(features)
+                        x_train.append(sfen)
                         y_train.append(value)
-                    features, value = mf.sfen2features_reverse(
-                        sfen=sfen, value=value, matting_value=matting_value
-                    )
-                    if int(key) % 9 == 0:
-                        x_test.append(features)
-                        y_test.append(value)
-                    elif i < int(len(file_list) * train_ratio):
-                        x_train.append(features)
-                        y_train.append(value)
+                    # バッチサイズ分データが溜まったらファイル保存する
+                    if len(x_train) == batch_size // 4:
+                        with open(
+                            f"{tmp_path}/train_{train_file_number}.pkl", "wb"
+                        ) as f:
+                            pickle.dump((x_train, y_train), f)
+                        x_train = []
+                        y_train = []
+                        train_file_number += 1
+                    if len(x_test) == batch_size // 4:
+                        with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as f:
+                            pickle.dump((x_test, y_test), f)
+                        x_test = []
+                        y_test = []
+                        test_file_number += 1
+    with open(f"{tmp_path}/train_{train_file_number}.pkl", "wb") as f:
+        pickle.dump((x_train, y_train), f)
+    with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as f:
+        pickle.dump((x_test, y_test), f)
 
-    x_train = np.array(x_train)
-    y_train = np.array(y_train) / value_scale
-    x_test = np.array(x_test)
-    y_test = np.array(y_test) / value_scale
-    print(x_train.shape)
-    print(x_test.shape)
+    train_generator = TrainSequence(
+        root_path=tmp_path,
+        train_file_number=train_file_number + 1,
+        matting_value=matting_value,
+        value_scale=value_scale,
+    )
+    validation_generator = ValidationSequence(
+        root_path=tmp_path,
+        test_file_number=test_file_number + 1,
+        matting_value=matting_value,
+        value_scale=value_scale,
+    )
+
+    print(train_file_number * batch_size + len(x_train) * 4)
+    print(test_file_number * batch_size + len(x_test) * 4)
 
     # 学習
     model = mlp()
@@ -221,13 +362,13 @@ def main(
     early_stop = tf.keras.callbacks.EarlyStopping(monitor="loss", patience=3)
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
     model.fit(
-        x=x_train,
-        y=y_train,
-        batch_size=65535,
+        train_generator,
         epochs=1000,
-        validation_data=(x_test, y_test),
-        shuffle=False,
+        validation_data=validation_generator,
         callbacks=[reduce_lr, early_stop],
+        max_queue_size=24,
+        workers=12,
+        use_multiprocessing=True,
     )
     model.save("mlp")
 
@@ -239,16 +380,23 @@ def main(
     eval_json: typing.TextIO = open("eval.json", "w")
     json.dump({"params": params}, eval_json)
 
+    # 一時保存用フォルダの削除
+    shutil.rmtree(tmp_path)
+
 
 if __name__ == "__main__":
-    root_path = "./"  # 学習棋譜があるルートフォルダ
-    matting_value = 13544  # 勝ち(負け)を読み切ったときの評価値
+    root_path = "./kifu"  # 学習棋譜があるルートフォルダ
+    tmp_path = "./tmp"  # 一時保存データ用のフォルダ
+    matting_value = 19089  # 勝ち(負け)を読み切ったときの評価値
     value_scale = 512  # 学習時の評価値スケーリングパラメータ
     train_ratio = 0.9  # 学習に使用する棋譜ファイルの割合
+    batch_size = 65536  # バッチサイズ
 
     main(
         root_path=root_path,
+        tmp_path=tmp_path,
         train_ratio=train_ratio,
         matting_value=matting_value,
         value_scale=value_scale,
+        batch_size=batch_size,
     )
