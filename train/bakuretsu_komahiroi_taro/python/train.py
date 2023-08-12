@@ -146,17 +146,6 @@ class MakeFeatures:
 
         return features, value
 
-    def flip_features(self, features: typing.List[int]) -> typing.List[int]:
-        outputs: typing.List[int] = []
-
-        for i in range(72, -1, -9):
-            for j in range(9):
-                outputs.append(features[i + j])
-        for i in range(81, 95):
-            outputs.append(features[i])
-
-        return features
-
 
 class TrainSequence(keras.utils.Sequence):  # type:ignore
     def __init__(
@@ -189,17 +178,9 @@ class TrainSequence(keras.utils.Sequence):  # type:ignore
             batch_x.append(x)
             batch_y.append(y)
 
-            x = self.mf.flip_features(x)
-            batch_x.append(x)
-            batch_y.append(y)
-
             x, y = self.mf.sfen2features_reverse(
                 sfen=sfen, value=value, matting_value=self.matting_value
             )
-            batch_x.append(x)
-            batch_y.append(y)
-
-            x = self.mf.flip_features(x)
             batch_x.append(x)
             batch_y.append(y)
 
@@ -237,17 +218,9 @@ class ValidationSequence(keras.utils.Sequence):  # type:ignore
             batch_x.append(x)
             batch_y.append(y)
 
-            x = self.mf.flip_features(x)
-            batch_x.append(x)
-            batch_y.append(y)
-
             x, y = self.mf.sfen2features_reverse(
                 sfen=sfen, value=value, matting_value=self.matting_value
             )
-            batch_x.append(x)
-            batch_y.append(y)
-
-            x = self.mf.flip_features(x)
             batch_x.append(x)
             batch_y.append(y)
 
@@ -315,7 +288,7 @@ def main(
                         x_train.append(sfen)
                         y_train.append(value)
                     # バッチサイズ分データが溜まったらファイル保存する
-                    if len(x_train) == batch_size // 4:
+                    if len(x_train) == batch_size // 2:
                         with open(
                             f"{tmp_path}/train_{train_file_number}.pkl", "wb"
                         ) as f:
@@ -323,7 +296,7 @@ def main(
                         x_train = []
                         y_train = []
                         train_file_number += 1
-                    if len(x_test) == batch_size // 4:
+                    if len(x_test) == batch_size // 2:
                         with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as f:
                             pickle.dump((x_test, y_test), f)
                         x_test = []
@@ -347,8 +320,8 @@ def main(
         value_scale=value_scale,
     )
 
-    print(train_file_number * batch_size + len(x_train) * 4)
-    print(test_file_number * batch_size + len(x_test) * 4)
+    print(train_file_number * batch_size + len(x_train) * 2)
+    print(test_file_number * batch_size + len(x_test) * 2)
 
     # 学習
     model = mlp()
