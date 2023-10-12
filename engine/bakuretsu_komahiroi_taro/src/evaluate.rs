@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use shogi_core::{Color, PieceKind, Square};
+use shogi_core::{Color, Piece, PieceKind, Square};
 use yasai::Position;
 
 const VALUE_SCALE: f32 = 512.;
@@ -34,7 +34,7 @@ impl Evaluate {
         let eval_json: EvalJson =
             serde_json::from_reader(reader).expect("Cannot read evaluate file.");
 
-        let mut model = vec![vec![vec![vec![vec![0f32; 31]; 95]; 81]; 81]; 2];
+        let mut model = vec![vec![vec![vec![vec![0f32; 31]; 95]; 31]; 95]; 2];
         let mut idx = 0;
         for i in model.iter_mut() {
             for j in i.iter_mut() {
@@ -63,27 +63,22 @@ impl Evaluate {
         //!   - value: i32
         //!     - 評価値
 
-        let bking_sq = if let Some(bking_sq) = pos.king_position(Color::Black) {
-            bking_sq.array_index()
-        } else {
-            panic!("Not found black king.");
-        };
-        let wking_sq = if let Some(wking_sq) = pos.king_position(Color::White) {
-            wking_sq.array_index()
-        } else {
-            panic!("Not found white king.");
-        };
-        // let turn = pos.side_to_move().array_index();
-
         let mut value = 0.;
 
+        let mut sqs_pcs: Vec<(Square, Piece)> = Vec::new();
         for sq in Square::all() {
             let pc = pos.piece_at(sq);
-            if let Some(ref pc) = pc {
-                value += self.model[0][bking_sq / 27 * 9 + bking_sq % 9]
-                    [wking_sq / 27 * 9 + wking_sq % 9][sq.array_index()][pc.as_u8() as usize];
-            } else {
-                value += self.model[0][0][0][0][0];
+            if let Some(pc) = pc {
+                sqs_pcs.push((sq, pc));
+            }
+        }
+        for (sq1, pc1) in sqs_pcs.iter() {
+            for (sq2, pc2) in sqs_pcs.iter() {
+                if sq1.array_index() > sq2.array_index() {
+                    continue;
+                }
+                value += self.model[0][sq1.array_index()][pc1.as_u8() as usize][sq2.array_index()]
+                    [pc2.as_u8() as usize];
             }
         }
 
@@ -96,10 +91,7 @@ impl Evaluate {
                 }
                 let count = hand.Hand_count(piece_type) as usize;
                 if count != 0 {
-                    value += self.model[0][bking_sq / 27 * 9 + bking_sq % 9]
-                        [wking_sq / 27 * 9 + wking_sq % 9][idx][count];
-                } else {
-                    value += self.model[0][0][0][0][0];
+                    value += self.model[0][0][0][idx][count];
                 }
                 idx += 1;
             }
@@ -120,7 +112,7 @@ mod tests {
         let path = "test/load_inference.json";
 
         let eval = EvalJson {
-            params: vec![0.; 38644290],
+            params: vec![0.; 17346050],
         };
         let mut file = std::fs::File::create(path).unwrap();
         let value = serde_json::to_string(&eval).unwrap();
