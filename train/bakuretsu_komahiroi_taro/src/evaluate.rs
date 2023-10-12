@@ -80,8 +80,8 @@ impl Evaluate {
         for sq in Square::all() {
             let pc = pos.piece_at(sq);
             if let Some(ref pc) = pc {
-                value += self.model[0][bking_sq % 9][wking_sq % 9][sq.array_index()]
-                    [pc.as_u8() as usize];
+                value += self.model[0][bking_sq / 27 * 9 + bking_sq % 9]
+                    [wking_sq / 27 * 9 + wking_sq % 9][sq.array_index()][pc.as_u8() as usize];
             } else {
                 value += self.model[0][0][0][0][0];
             }
@@ -96,7 +96,8 @@ impl Evaluate {
                 }
                 let count = hand.Hand_count(piece_type) as usize;
                 if count != 0 {
-                    value += self.model[0][bking_sq % 9][wking_sq % 9][idx][count];
+                    value += self.model[0][bking_sq / 27 * 9 + bking_sq % 9]
+                        [wking_sq / 27 * 9 + wking_sq % 9][idx][count];
                 } else {
                     value += self.model[0][0][0][0][0];
                 }
