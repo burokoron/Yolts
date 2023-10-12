@@ -13,11 +13,11 @@ from tqdm import tqdm
 
 class MakeFeatures:
     def __init__(self) -> None:
-        self.features_table = np.zeros((2, 81, 81, 95, 31), dtype=np.uint32)
+        self.features_table = np.zeros((2, 95, 31, 95, 31), dtype=np.uint32)
         idx = 0
         for i in range(2):
-            for j in range(81):
-                for k in range(81):
+            for j in range(95):
+                for k in range(31):
                     for m in range(95):
                         for n in range(31):
                             self.features_table[i][j][k][m][n] = idx
@@ -30,8 +30,7 @@ class MakeFeatures:
         bp, wp = board.pieces_in_hand
         pieces = board.pieces
         features: typing.List[int] = []
-        bking_pos = None
-        wking_pos = None
+
         for i in range(len(pieces)):
             if pieces[i] == 5:
                 pieces[i] = 6
@@ -46,37 +45,24 @@ class MakeFeatures:
             elif pieces[i] == 23:
                 pieces[i] = 21
 
-            if pieces[i] == 8:
-                bking_pos = i
-            elif pieces[i] == 24:
-                wking_pos = i
-
-        assert bking_pos is not None
-        assert wking_pos is not None
-
-        bking_pos = bking_pos // 27 * 9 + bking_pos % 9
-        wking_pos = wking_pos // 27 * 9 + wking_pos % 9
-        for i in range(len(pieces)):
-            if pieces[i] == 0:
+        for i, pi in enumerate(pieces):
+            for j, pj in enumerate(pieces):
+                if i > j:
+                    continue
+                if pi == 0 or pj == 0:
+                    features.append(0)
+                else:
+                    features.append(self.features_table[0][i][pi][j][pj])
+        for i, p in enumerate(bp):
+            if p == 0:
                 features.append(0)
             else:
-                features.append(
-                    self.features_table[0][bking_pos][wking_pos][i][pieces[i]]
-                )
-        for i in range(len(bp)):
-            if bp[i] == 0:
+                features.append(self.features_table[0][0][0][81 + i][p])
+        for i, p in enumerate(wp):
+            if p == 0:
                 features.append(0)
             else:
-                features.append(
-                    self.features_table[0][bking_pos][wking_pos][81 + i][bp[i]]
-                )
-        for i in range(len(wp)):
-            if wp[i] == 0:
-                features.append(0)
-            else:
-                features.append(
-                    self.features_table[0][bking_pos][wking_pos][88 + i][wp[i]]
-                )
+                features.append(self.features_table[0][0][0][88 + i][p])
 
         value = min([max([value, -matting_value]), matting_value])
 
@@ -89,8 +75,7 @@ class MakeFeatures:
         bp, wp = board.pieces_in_hand
         pieces = board.pieces
         features: typing.List[int] = []
-        bking_pos = None
-        wking_pos = None
+
         for i in range(len(pieces) - 1, -1, -1):
             if pieces[i] == 5:
                 pieces[i] = 6
@@ -110,37 +95,25 @@ class MakeFeatures:
             elif 17 <= pieces[i]:
                 pieces[i] -= 16
 
-            if pieces[i] == 8:
-                bking_pos = i
-            elif pieces[i] == 24:
-                wking_pos = i
-
-        assert bking_pos is not None
-        assert wking_pos is not None
-
-        bking_pos = bking_pos // 27 * 9 + bking_pos % 9
-        wking_pos = wking_pos // 27 * 9 + wking_pos % 9
-        for i in range(len(pieces) - 1, -1, -1):
-            if pieces[i] == 0:
+        pieces_rev = list(reversed(pieces))
+        for i, pi in enumerate(pieces_rev):
+            for j, pj in enumerate(pieces_rev):
+                if i > j:
+                    continue
+                if pi == 0 or pj == 0:
+                    features.append(0)
+                else:
+                    features.append(self.features_table[0][i][pi][j][pj])
+        for i, p in enumerate(wp):
+            if p == 0:
                 features.append(0)
             else:
-                features.append(
-                    self.features_table[0][bking_pos][wking_pos][i][pieces[i]]
-                )
-        for i in range(len(wp)):
-            if wp[i] == 0:
+                features.append(self.features_table[0][0][0][81 + i][p])
+        for i, p in enumerate(bp):
+            if p == 0:
                 features.append(0)
             else:
-                features.append(
-                    self.features_table[0][bking_pos][wking_pos][81 + i][wp[i]]
-                )
-        for i in range(len(bp)):
-            if bp[i] == 0:
-                features.append(0)
-            else:
-                features.append(
-                    self.features_table[0][bking_pos][wking_pos][88 + i][bp[i]]
-                )
+                features.append(self.features_table[0][0][0][88 + i][p])
 
         value = min([max([-value, -matting_value]), matting_value])
 
@@ -184,7 +157,7 @@ class TrainSequence(keras.utils.Sequence):  # type:ignore
             batch_x.append(x)
             batch_y.append(y)
 
-        return np.array(batch_x), np.array(batch_y) / self.value_scale
+        return np.array(batch_x, dtype=np.uint32), np.array(batch_y) / self.value_scale
 
 
 class ValidationSequence(keras.utils.Sequence):  # type:ignore
@@ -224,17 +197,17 @@ class ValidationSequence(keras.utils.Sequence):  # type:ignore
             batch_x.append(x)
             batch_y.append(y)
 
-        return np.array(batch_x), np.array(batch_y) / self.value_scale
+        return np.array(batch_x, dtype=np.uint32), np.array(batch_y) / self.value_scale
 
 
 def mlp() -> keras.models.Model:
-    inputs = keras.layers.Input(shape=95, name="inputs")
+    inputs = keras.layers.Input(shape=3335, name="inputs")
     x = keras.layers.Embedding(
-        input_dim=38644290,
+        input_dim=17346050,
         output_dim=1,
         embeddings_initializer=tf.keras.initializers.Zeros(),
         mask_zero=True,
-        input_length=95,
+        input_length=3335,
     )(inputs)
     outputs = tf.math.reduce_sum(input_tensor=x, axis=1)
 
@@ -326,21 +299,24 @@ def main(
     # 学習
     model = mlp()
     model.summary()
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.05)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)
     loss = tf.keras.losses.MeanSquaredError()
     metrics = tf.keras.metrics.MeanAbsoluteError()
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
-        monitor="loss", factor=0.2, patience=1, verbose=1, min_lr=0.0
+        monitor="val_loss", factor=0.2, patience=1, verbose=1
     )
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor="loss", patience=3)
+    early_stop = tf.keras.callbacks.EarlyStopping(
+        monitor="val_loss", min_delta=0.0001, patience=2
+    )
+    checkpoint = tf.keras.callbacks.ModelCheckpoint("checkpoint", monitor="val_loss")
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
     model.fit(
         train_generator,
         epochs=1000,
         validation_data=validation_generator,
-        callbacks=[reduce_lr, early_stop],
-        max_queue_size=24,
-        workers=12,
+        callbacks=[reduce_lr, early_stop, checkpoint],
+        max_queue_size=16,
+        workers=8,
         use_multiprocessing=True,
     )
     model.save("mlp")
@@ -360,10 +336,10 @@ def main(
 if __name__ == "__main__":
     root_path = "./kifu"  # 学習棋譜があるルートフォルダ
     tmp_path = "./tmp"  # 一時保存データ用のフォルダ
-    matting_value = 19089  # 勝ち(負け)を読み切ったときの評価値
+    matting_value = 16207  # 勝ち(負け)を読み切ったときの評価値
     value_scale = 512  # 学習時の評価値スケーリングパラメータ
     train_ratio = 0.9  # 学習に使用する棋譜ファイルの割合
-    batch_size = 65536  # バッチサイズ
+    batch_size = 8192  # バッチサイズ
 
     main(
         root_path=root_path,
