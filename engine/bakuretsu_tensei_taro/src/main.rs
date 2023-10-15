@@ -118,7 +118,7 @@ impl BakuretsuTenseiTaro {
                                 value as i32;
                         }
                     }
-                    1 | 2 | 3 | 4 => {
+                    1..=4 => {
                         for i in 0..5 {
                             let value = eval["pieces_in_hand_dict"][piece_idx.to_string()]
                                 [i.to_string()]
