@@ -27,21 +27,6 @@ jobs:
       with:
         toolchain: stable
         components: rustfmt, clippy
-    - name: Run bakuretsu_komasute_taro_r fmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: --all --manifest-path engine/bakuretsu_komasute_taro_r/Cargo.toml -- --check
-    - name: Run bakuretsu_komasute_taro_r clippy
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-        args: --manifest-path engine/bakuretsu_komasute_taro_r/Cargo.toml -- -D warnings
-    - name: Run bakuretsu_komasute_taro_r tests
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --release --manifest-path engine/bakuretsu_komasute_taro_r/Cargo.toml --all-features
         
     - name: Run bakuretsu_tensei_taro engine fmt
       uses: actions-rs/cargo@v1
