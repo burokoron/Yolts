@@ -244,6 +244,7 @@ impl BakuretsuKomahiroiTaro {
                     piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                     killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
                 },
+                position_history: position_history.clone(),
             }
         } else {
             panic!("Cannot load evaluate model.");
@@ -256,11 +257,12 @@ impl BakuretsuKomahiroiTaro {
 
         // 通常の探索
         let mut best_move = "resign".to_string();
+        let mut position_value = vec![nega.eval.inference_diff(pos, None, None); 1];
         for depth in 1..=self.depth_limit {
             nega.max_depth = depth;
             let value = nega.search(
                 pos,
-                position_history,
+                &mut position_value,
                 false,
                 depth,
                 -MATING_VALUE,

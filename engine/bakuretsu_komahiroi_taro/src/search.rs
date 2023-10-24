@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use yasai::Position;
 
 use crate::evaluate::Evaluate;
+use crate::evaluate::VALUE_SCALE;
 
 pub const MATING_VALUE: i32 = 30000;
 
@@ -32,15 +33,18 @@ pub struct NegaAlpha<'a> {
     pub eval: &'a Evaluate,
     pub hash_table: HashTable,
     pub move_ordering: MoveOrdering,
+    pub position_history: HashSet<u64>,
 }
 
 impl NegaAlpha<'_> {
-    fn evaluate(&mut self, pos: &mut Position) -> i32 {
-        //! 局面の評価
+    fn evaluate_diff(&mut self, pos: &mut Position, position_value: &[f32]) -> i32 {
+        //! 局面の差分評価
         //!
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 評価する局面
+        //!   - position_value: &[f32]
+        //!     - 局面の評価
         //! - Returns
         //!   - value: i32
         //!     - 評価値
@@ -54,7 +58,11 @@ impl NegaAlpha<'_> {
         self.num_searched += 1;
 
         // 通常の評価
-        let value = self.eval.inference(pos);
+        let value = if let Some(value) = position_value.last() {
+            (*value * VALUE_SCALE) as i32
+        } else {
+            panic!("Empty position_value.")
+        };
 
         // 後手番なら評価値反転
         if pos.side_to_move() == Color::Black {
@@ -67,6 +75,7 @@ impl NegaAlpha<'_> {
     fn quiescence_search(
         &mut self,
         pos: &mut Position,
+        position_value: &mut Vec<f32>,
         depth: u32,
         mut alpha: i32,
         beta: i32,
@@ -76,6 +85,8 @@ impl NegaAlpha<'_> {
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 静止探索する局面
+        //!   - position_value: &mut Vec<f32>
+        //!     - 局面の評価値
         //!   - depth: u32
         //!     - 残り探索深さ
         //!   - mut alpha: i32
@@ -98,7 +109,7 @@ impl NegaAlpha<'_> {
             return alpha;
         }
 
-        let value = self.evaluate(pos);
+        let value = self.evaluate_diff(pos, position_value);
 
         if alpha < value {
             alpha = value;
@@ -156,9 +167,15 @@ impl NegaAlpha<'_> {
         move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
 
         for m in move_list {
+            position_value.push(self.eval.inference_diff(
+                pos,
+                Some(m.0),
+                position_value.last().copied(),
+            ));
             pos.do_move(m.0);
-            let value = -self.quiescence_search(pos, depth - 1, -beta, -alpha);
+            let value = -self.quiescence_search(pos, position_value, depth - 1, -beta, -alpha);
             pos.undo_move(m.0);
+            position_value.pop();
 
             if alpha < value {
                 alpha = value;
@@ -174,7 +191,7 @@ impl NegaAlpha<'_> {
     pub fn search(
         &mut self,
         pos: &mut Position,
-        position_history: &mut HashSet<u64>,
+        position_value: &mut Vec<f32>,
         in_null_move: bool,
         depth: u32,
         mut alpha: i32,
@@ -185,8 +202,8 @@ impl NegaAlpha<'_> {
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 探索する局面
-        //!   - position_history: &mut HashSet<u64>
-        //!     - 局面の履歴
+        //!   - position_value: &mut Vec<f32>
+        //!     - 局面の評価値
         //!   - in_null_move: bool
         //!     - null moveした直後かどうか
         //!   - depth: u32
@@ -212,7 +229,7 @@ impl NegaAlpha<'_> {
         }
 
         // 同一局面の確認
-        if position_history.contains(&pos.key()) {
+        if self.position_history.contains(&pos.key()) {
             if pos.in_check() {
                 return MATING_VALUE - pos.ply() as i32;
             } else {
@@ -241,7 +258,7 @@ impl NegaAlpha<'_> {
 
         // 探索深さ制限なら
         if depth == 0 {
-            return self.quiescence_search(pos, 3, alpha, beta);
+            return self.quiescence_search(pos, position_value, 3, alpha, beta);
         }
 
         // Mate Distance Pruning
@@ -275,18 +292,12 @@ impl NegaAlpha<'_> {
             && !pos.in_check()
             && !in_null_move
         {
-            let value = self.evaluate(pos);
+            let value = self.evaluate_diff(pos, position_value);
             if value >= beta {
                 let reduce = 2;
                 pos.do_null_move();
-                let value = -self.search(
-                    pos,
-                    position_history,
-                    true,
-                    depth - reduce,
-                    -beta,
-                    -beta + 1,
-                );
+                let value =
+                    -self.search(pos, position_value, true, depth - reduce, -beta, -beta + 1);
                 pos.undo_null_move();
                 if value >= beta {
                     return beta;
@@ -369,10 +380,15 @@ impl NegaAlpha<'_> {
         move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
 
         // 全合法手展開
-        position_history.insert(pos.key());
+        self.position_history.insert(pos.key());
         for m in move_list {
+            position_value.push(self.eval.inference_diff(
+                pos,
+                Some(m.0),
+                position_value.last().copied(),
+            ));
             pos.do_move(m.0);
-            let value = -self.search(pos, position_history, false, depth - 1, -beta, -best_value);
+            let value = -self.search(pos, position_value, false, depth - 1, -beta, -best_value);
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
@@ -381,6 +397,7 @@ impl NegaAlpha<'_> {
                 }
             }
             pos.undo_move(m.0);
+            position_value.pop();
             if best_value >= beta {
                 // Killer Heuristic
                 if self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]
@@ -414,7 +431,7 @@ impl NegaAlpha<'_> {
                 break;
             }
         }
-        position_history.remove(&pos.key());
+        self.position_history.remove(&pos.key());
 
         // 置換表へ登録
         let hash_table_value = self
