@@ -380,18 +380,32 @@ impl NegaAlpha<'_> {
         move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
 
         // 全合法手展開
+        let mut is_lmr = depth >= 2 && depth != self.max_depth;
         self.position_history.insert(pos.key());
-        for m in move_list {
+        for (move_count, m) in move_list.iter().enumerate() {
             position_value.push(self.eval.inference_diff(
                 pos,
                 Some(m.0),
                 position_value.last().copied(),
             ));
             pos.do_move(m.0);
+            // Late Move Reductions
+            if is_lmr && m.1 < 10 && move_count >= 6 && !pos.in_check() {
+                let value = -self.search(pos, position_value, false, depth - 2, -beta, -best_value);
+                if value <= best_value {
+                    pos.undo_move(m.0);
+                    position_value.pop();
+                    continue;
+                }
+            }
+            // 通常の探索
             let value = -self.search(pos, position_value, false, depth - 1, -beta, -best_value);
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
+                if is_lmr && m.1 >= 10 && move_count < 6 {
+                    is_lmr = false;
+                }
                 if depth == self.max_depth {
                     self.best_move_pv = Some(m.0);
                 }
