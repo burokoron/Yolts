@@ -240,7 +240,7 @@ def main(
 ) -> None:
     # 学習対象のエンジンの起動
     train_engine = Engine(path=train_engine_path)
-    train_engine.usi(verbose=False)
+    train_engine.usi(verbose=True)
     print(f"engine: {train_engine.name}")
     print(f"author: {train_engine.author}")
     train_engine.setoption(name="DepthLimit", value="4", verbose=False)
@@ -252,7 +252,7 @@ def main(
     target_engine_list: typing.List[Engine] = []
     for path in target_engine_path:
         target_engine_list.append(Engine(path=path))
-        target_engine_list[-1].usi(verbose=False)
+        target_engine_list[-1].usi(verbose=True)
         print(f"engine: {target_engine_list[-1].name}")
         print(f"author: {target_engine_list[-1].author}")
         target_engine_list[-1].setoption(name="DepthLimit", value="4", verbose=False)

@@ -11,7 +11,6 @@ line_length = 88
 py_version = "py38"
 [[tool.pysen.lint.mypy_targets]]
   paths = [
-    "train/bakuretsu_tensei_taro/python/",
     "train/bakuretsu_komahiroi_taro/python",
     "utils/",
   ]
