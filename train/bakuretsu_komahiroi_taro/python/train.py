@@ -2,12 +2,16 @@ import json
 import os
 import pickle
 import shutil
+import time
 import typing
 
 import cshogi
 import numpy as np
-import tensorflow as tf
-import tensorflow.keras as keras
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
+from torchinfo import summary
 from tqdm import tqdm
 
 
@@ -120,7 +124,7 @@ class MakeFeatures:
         return features, value
 
 
-class TrainSequence(keras.utils.Sequence):  # type:ignore
+class TrainDataset(Dataset):
     def __init__(
         self,
         root_path: str,
@@ -138,29 +142,31 @@ class TrainSequence(keras.utils.Sequence):  # type:ignore
         return self.train_file_number
 
     def __getitem__(self, idx: int) -> typing.Any:
-
         batch_x: typing.Any = []
         batch_y: typing.Any = []
 
         with open(f"{self.root_path}/train_{idx}.pkl", "rb") as f:
             x_train, y_train = pickle.load(f)
-        for (sfen, value) in zip(x_train, y_train):
+        for sfen, value in zip(x_train, y_train):
             x, y = self.mf.sfen2features(
                 sfen=sfen, value=value, matting_value=self.matting_value
             )
             batch_x.append(x)
-            batch_y.append(y)
+            batch_y.append([y])
 
             x, y = self.mf.sfen2features_reverse(
                 sfen=sfen, value=value, matting_value=self.matting_value
             )
             batch_x.append(x)
-            batch_y.append(y)
+            batch_y.append([y])
 
-        return np.array(batch_x, dtype=np.uint32), np.array(batch_y) / self.value_scale
+        return (
+            torch.tensor(batch_x, dtype=torch.int32),
+            torch.tensor(batch_y) / self.value_scale,
+        )
 
 
-class ValidationSequence(keras.utils.Sequence):  # type:ignore
+class ValidationDataset(Dataset):
     def __init__(
         self,
         root_path: str,
@@ -178,45 +184,45 @@ class ValidationSequence(keras.utils.Sequence):  # type:ignore
         return self.test_file_number
 
     def __getitem__(self, idx: int) -> typing.Any:
-
         batch_x: typing.Any = []
         batch_y: typing.Any = []
 
         with open(f"{self.root_path}/test_{idx}.pkl", "rb") as f:
             x_test, y_test = pickle.load(f)
-        for (sfen, value) in zip(x_test, y_test):
+        for sfen, value in zip(x_test, y_test):
             x, y = self.mf.sfen2features(
                 sfen=sfen, value=value, matting_value=self.matting_value
             )
             batch_x.append(x)
-            batch_y.append(y)
+            batch_y.append([y])
 
             x, y = self.mf.sfen2features_reverse(
                 sfen=sfen, value=value, matting_value=self.matting_value
             )
             batch_x.append(x)
-            batch_y.append(y)
+            batch_y.append([y])
 
-        return np.array(batch_x, dtype=np.uint32), np.array(batch_y) / self.value_scale
+        return (
+            torch.tensor(batch_x, dtype=torch.int32),
+            torch.tensor(batch_y) / self.value_scale,
+        )
 
 
-def mlp() -> keras.models.Model:
-    inputs = keras.layers.Input(shape=3335, name="inputs")
-    x = keras.layers.Embedding(
-        input_dim=17346050,
-        output_dim=1,
-        embeddings_initializer=tf.keras.initializers.Zeros(),
-        mask_zero=True,
-        input_length=3335,
-    )(inputs)
-    outputs = tf.math.reduce_sum(input_tensor=x, axis=1)
+class MLP(nn.Module):
+    def __init__(self, input_dim: int, output_dim: int):
+        super(MLP, self).__init__()
+        self.embedding = nn.Embedding(input_dim, output_dim, padding_idx=0)
 
-    return keras.models.Model(inputs=inputs, outputs=outputs)
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x = self.embedding(inputs)
+        outputs = torch.sum(input=x, dim=1)
+        return outputs
 
 
 def main(
     root_path: str,
     tmp_path: str,
+    checkpoint_path: str,
     train_ratio: float,
     matting_value: int,
     value_scale: int,
@@ -227,7 +233,7 @@ def main(
     x_test: typing.Any = []
     y_test: typing.Any = []
     same_sfen: typing.Set[str] = set()
-
+    # """
     file_list = [file for file in os.listdir(root_path) if file.split(".")[-1] == "pkl"]
     x_train = []
     y_train = []
@@ -280,52 +286,114 @@ def main(
     with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as f:
         pickle.dump((x_test, y_test), f)
 
-    train_generator = TrainSequence(
+    del same_sfen
+    # """
+    # train_file_number = 6817
+    # test_file_number = 1289
+    train_dataset = TrainDataset(
         root_path=tmp_path,
         train_file_number=train_file_number + 1,
         matting_value=matting_value,
         value_scale=value_scale,
     )
-    validation_generator = ValidationSequence(
+    train_data_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=None,
+        shuffle=False,
+        num_workers=16,
+        pin_memory=True,
+        persistent_workers=True,
+    )
+    validation_dataset = ValidationDataset(
         root_path=tmp_path,
         test_file_number=test_file_number + 1,
         matting_value=matting_value,
         value_scale=value_scale,
+    )
+    validation_data_loader = DataLoader(
+        dataset=validation_dataset,
+        batch_size=None,
+        shuffle=False,
+        num_workers=16,
+        pin_memory=True,
+        persistent_workers=True,
     )
 
     print(train_file_number * batch_size + len(x_train) * 2)
     print(test_file_number * batch_size + len(x_test) * 2)
 
     # 学習
-    model = mlp()
-    model.summary()
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)
-    loss = tf.keras.losses.MeanSquaredError()
-    metrics = tf.keras.metrics.MeanAbsoluteError()
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
-        monitor="val_loss", factor=0.2, patience=1, verbose=1
+    model = MLP(input_dim=17346050, output_dim=1)
+    model.embedding.weight.data.zero_()
+    summary(model, input_data=torch.zeros([1, 3335], dtype=torch.int32))
+    model.cuda()
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.005)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer=optimizer, factor=0.2, patience=0, verbose=True
     )
-    early_stop = tf.keras.callbacks.EarlyStopping(
-        monitor="val_loss", min_delta=0.0001, patience=2
-    )
-    checkpoint = tf.keras.callbacks.ModelCheckpoint("checkpoint", monitor="val_loss")
-    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
-    model.fit(
-        train_generator,
-        epochs=1000,
-        validation_data=validation_generator,
-        callbacks=[reduce_lr, early_stop, checkpoint],
-        max_queue_size=16,
-        workers=8,
-        use_multiprocessing=True,
-    )
-    model.save("mlp")
+    # early_stopping用
+    best_epoch = 0
+    best_validation_loss = 1e9
+    early_stopping_threshold = 0.0001
+    early_stopping_patience = 1
+    os.mkdir(checkpoint_path)
+    for epoch in range(1000):
+        # 学習
+        model.train()
+        train_loss = 0.0
+        start_time = time.time()
+        with tqdm(train_data_loader, leave=False) as pbar:
+            for i, data in enumerate(pbar):
+                inputs, labels = data
+                inputs, labels = inputs.cuda(), labels.cuda()
+
+                optimizer.zero_grad()
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+                train_loss += loss.item()
+
+                pbar.set_description(f"train epoch: {epoch + 1}")
+                pbar.set_postfix(ordered_dict={"loss": train_loss / (i + 1)})
+        # 評価
+        model.eval()
+        validation_loss = 0.0
+        with tqdm(validation_data_loader, leave=False) as pbar:
+            for i, data in enumerate(pbar):
+                inputs, labels = data
+                inputs, labels = inputs.cuda(), labels.cuda()
+
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+
+                validation_loss += loss.item()
+
+                pbar.set_description(f"validation epoch: {epoch + 1}")
+                pbar.set_postfix(ordered_dict={"loss": validation_loss / (i + 1)})
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        train_loss /= len(train_data_loader)
+        validation_loss /= len(validation_data_loader)
+        print(f"epoch: {epoch + 1}, train loss: {train_loss}, ", end="")
+        print(f"validation loss: {validation_loss}, elapsed time: {elapsed_time}s")
+        torch.save(
+            model.state_dict(), f"{checkpoint_path}/checkpoint_epoch_{epoch + 1}.pt"
+        )
+        scheduler.step(validation_loss)
+        if validation_loss + early_stopping_threshold < best_validation_loss:
+            best_epoch = epoch
+            best_validation_loss = validation_loss
+        elif best_epoch + early_stopping_patience < epoch:
+            print("Early Stopping!!")
+            break
+    torch.save(model.state_dict(), "model.pt")
 
     # jsonで保存
-    embedding = model.layers[1]
-    weights = embedding.get_weights()[0][:, 0]
+    weights = model.embedding.weight.cpu().detach().numpy()[:, 0]
     params = [float(weight) for weight in weights]
-
     eval_json: typing.TextIO = open("eval.json", "w")
     json.dump({"params": params}, eval_json)
 
@@ -336,7 +404,8 @@ def main(
 if __name__ == "__main__":
     root_path = "./kifu"  # 学習棋譜があるルートフォルダ
     tmp_path = "./tmp"  # 一時保存データ用のフォルダ
-    matting_value = 16207  # 勝ち(負け)を読み切ったときの評価値
+    checkpoint_path = "./checkpoint"  # モデルチェックポイントを保存するフォルダ
+    matting_value = 10075  # 勝ち(負け)を読み切ったときの評価値
     value_scale = 512  # 学習時の評価値スケーリングパラメータ
     train_ratio = 0.9  # 学習に使用する棋譜ファイルの割合
     batch_size = 8192  # バッチサイズ
@@ -344,6 +413,7 @@ if __name__ == "__main__":
     main(
         root_path=root_path,
         tmp_path=tmp_path,
+        checkpoint_path=checkpoint_path,
         train_ratio=train_ratio,
         matting_value=matting_value,
         value_scale=value_scale,
