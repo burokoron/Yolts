@@ -1,5 +1,5 @@
 [tool.pysen]
-version = "0.10"
+version = "0.10.5"
 
 [tool.pysen.lint]
 enable_black = true
@@ -8,7 +8,7 @@ enable_isort = true
 enable_mypy = true
 mypy_preset = "strict"
 line_length = 88
-py_version = "py38"
+py_version = "py311"
 [[tool.pysen.lint.mypy_targets]]
   paths = [
     "train/bakuretsu_komahiroi_taro/python",
