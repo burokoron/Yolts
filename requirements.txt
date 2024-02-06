@@ -14,12 +14,14 @@ GitPython==3.1.40
 idna==3.4
 isort==5.13.2
 Jinja2==3.1.2
+llvmlite==0.41.1
 MarkupSafe==2.1.3
 mccabe==0.7.0
 mpmath==1.3.0
 mypy==1.8.0
 mypy-extensions==1.0.0
 networkx==3.0
+numba==0.58.1
 numpy==1.24.1
 packaging==23.2
 pathspec==0.12.1
