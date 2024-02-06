@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from numba import njit
 from torch.utils.data import DataLoader, Dataset
 from torchinfo import summary
 from tqdm import tqdm
@@ -27,14 +28,11 @@ class MakeFeatures:
                             self.features_table[i][j][k][m][n] = idx
                             idx += 1
 
-    def sfen2features(
-        self, sfen: str, value: int, matting_value: int
-    ) -> typing.Tuple[typing.List[int], int]:
-        board: typing.Any = cshogi.Board(sfen)
-        bp, wp = board.pieces_in_hand
-        pieces = board.pieces
-        features: typing.List[int] = []
-
+    @staticmethod
+    @njit
+    def _piece_relationship(
+        pieces: typing.Any, bp: typing.Any, wp: typing.Any, features_table: typing.Any
+    ) -> typing.Any:
         for i in range(len(pieces)):
             if pieces[i] == 5:
                 pieces[i] = 6
@@ -49,37 +47,53 @@ class MakeFeatures:
             elif pieces[i] == 23:
                 pieces[i] = 21
 
-        for i, pi in enumerate(pieces):
-            for j, pj in enumerate(pieces):
+        features = np.zeros(3335, dtype=np.int32)
+        idx = 0
+        for i in range(len(pieces)):
+            for j in range(len(pieces)):
                 if i > j:
                     continue
-                if pi == 0 or pj == 0:
-                    features.append(0)
+                if pieces[i] == 0 or pieces[j] == 0:
+                    features[idx] = 0
                 else:
-                    features.append(self.features_table[0][i][pi][j][pj])
-        for i, p in enumerate(bp):
-            if p == 0:
-                features.append(0)
+                    features[idx] = features_table[0][i][pieces[i]][j][pieces[j]]
+                idx += 1
+        for i in range(len(bp)):
+            if bp[i] == 0:
+                features[idx] = 0
             else:
-                features.append(self.features_table[0][0][0][81 + i][p])
-        for i, p in enumerate(wp):
-            if p == 0:
-                features.append(0)
+                features[idx] = features_table[0][0][0][81 + i][bp[i]]
+            idx += 1
+        for i in range(len(wp)):
+            if wp[i] == 0:
+                features[idx] = 0
             else:
-                features.append(self.features_table[0][0][0][88 + i][p])
+                features[idx] = features_table[0][0][0][88 + i][wp[i]]
+            idx += 1
+
+        return features
+
+    def sfen2features(
+        self, sfen: str, value: int, matting_value: int
+    ) -> typing.Tuple[typing.Any, int]:
+        board: typing.Any = cshogi.Board(sfen)
+        bp, wp = board.pieces_in_hand
+        pieces = board.pieces
+
+        bp = np.array(bp)
+        wp = np.array(wp)
+        pieces = np.array(pieces)
+        features = self._piece_relationship(pieces, bp, wp, self.features_table)
 
         value = min([max([value, -matting_value]), matting_value])
 
         return features, value
 
-    def sfen2features_reverse(
-        self, sfen: str, value: int, matting_value: int
-    ) -> typing.Tuple[typing.List[int], int]:
-        board: typing.Any = cshogi.Board(sfen)
-        bp, wp = board.pieces_in_hand
-        pieces = board.pieces
-        features: typing.List[int] = []
-
+    @staticmethod
+    @njit
+    def _piece_relationship_reverse(
+        pieces: typing.Any, bp: typing.Any, wp: typing.Any, features_table: typing.Any
+    ) -> typing.Any:
         for i in range(len(pieces) - 1, -1, -1):
             if pieces[i] == 5:
                 pieces[i] = 6
@@ -99,25 +113,47 @@ class MakeFeatures:
             elif 17 <= pieces[i]:
                 pieces[i] -= 16
 
-        pieces_rev = list(reversed(pieces))
-        for i, pi in enumerate(pieces_rev):
-            for j, pj in enumerate(pieces_rev):
+        pieces_rev = pieces[::-1]
+
+        features = np.zeros(3335, dtype=np.int32)
+        idx = 0
+        for i in range(len(pieces_rev)):
+            for j in range(len(pieces_rev)):
                 if i > j:
                     continue
-                if pi == 0 or pj == 0:
-                    features.append(0)
+                if pieces_rev[i] == 0 or pieces_rev[j] == 0:
+                    features[idx] = 0
                 else:
-                    features.append(self.features_table[0][i][pi][j][pj])
-        for i, p in enumerate(wp):
-            if p == 0:
-                features.append(0)
+                    features[idx] = features_table[0][i][pieces_rev[i]][j][
+                        pieces_rev[j]
+                    ]
+                idx += 1
+        for i in range(len(wp)):
+            if wp[i] == 0:
+                features[idx] = 0
             else:
-                features.append(self.features_table[0][0][0][81 + i][p])
-        for i, p in enumerate(bp):
-            if p == 0:
-                features.append(0)
+                features[idx] = features_table[0][0][0][81 + i][wp[i]]
+            idx += 1
+        for i in range(len(bp)):
+            if bp[i] == 0:
+                features[idx] = 0
             else:
-                features.append(self.features_table[0][0][0][88 + i][p])
+                features[idx] = features_table[0][0][0][88 + i][bp[i]]
+            idx += 1
+
+        return features
+
+    def sfen2features_reverse(
+        self, sfen: str, value: int, matting_value: int
+    ) -> typing.Tuple[typing.Any, int]:
+        board: typing.Any = cshogi.Board(sfen)
+        bp, wp = board.pieces_in_hand
+        pieces = board.pieces
+
+        bp = np.array(bp)
+        wp = np.array(wp)
+        pieces = np.array(pieces)
+        features = self._piece_relationship_reverse(pieces, bp, wp, self.features_table)
 
         value = min([max([-value, -matting_value]), matting_value])
 
@@ -159,6 +195,8 @@ class TrainDataset(Dataset):
             )
             batch_x.append(x)
             batch_y.append([y])
+        batch_x = np.array(batch_x)
+        batch_y = np.array(batch_y)
 
         return (
             torch.tensor(batch_x, dtype=torch.int32),
@@ -201,6 +239,8 @@ class ValidationDataset(Dataset):
             )
             batch_x.append(x)
             batch_y.append([y])
+        batch_x = np.array(batch_x)
+        batch_y = np.array(batch_y)
 
         return (
             torch.tensor(batch_x, dtype=torch.int32),
@@ -288,8 +328,8 @@ def main(
 
     del same_sfen
     # """
-    # train_file_number = 6817
-    # test_file_number = 1289
+    # train_file_number = 26594
+    # test_file_number = 2998
     train_dataset = TrainDataset(
         root_path=tmp_path,
         train_file_number=train_file_number + 1,
@@ -300,7 +340,7 @@ def main(
         dataset=train_dataset,
         batch_size=None,
         shuffle=False,
-        num_workers=16,
+        num_workers=8,
         pin_memory=True,
         persistent_workers=True,
     )
@@ -314,7 +354,7 @@ def main(
         dataset=validation_dataset,
         batch_size=None,
         shuffle=False,
-        num_workers=16,
+        num_workers=8,
         pin_memory=True,
         persistent_workers=True,
     )
@@ -325,10 +365,12 @@ def main(
     # 学習
     model = MLP(input_dim=17346050, output_dim=1)
     model.embedding.weight.data.zero_()
+    # model.load_state_dict(torch.load(os.path.join(checkpoint_path, "checkpoint_epoch_20.pt")))
     summary(model, input_data=torch.zeros([1, 3335], dtype=torch.int32))
     model.cuda()
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.005)
+    # optimizer = optim.Adam(model.parameters(), lr=4e-05)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer, factor=0.2, patience=0, verbose=True
     )
