@@ -1,5 +1,6 @@
+use arrayvec::ArrayVec;
 use shogi_core::{Color, Move, Piece, PieceKind, Square};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use yasai::Position;
 
 use crate::evaluate::Evaluate;
@@ -7,15 +8,13 @@ use crate::evaluate::VALUE_SCALE;
 
 pub const MATING_VALUE: i32 = 30000;
 
+#[derive(Clone)]
 pub struct HashTableValue {
-    depth: u32,
-    upper: i32,
-    lower: i32,
-    best_move: Option<Move>,
-}
-
-pub struct HashTable {
-    pub pos: HashMap<u64, HashTableValue>,
+    pub key: u64,
+    pub depth: u32,
+    pub upper: i32,
+    pub lower: i32,
+    pub best_move: Option<Move>,
 }
 
 pub struct MoveOrdering {
@@ -23,20 +22,20 @@ pub struct MoveOrdering {
     pub killer_heuristic: Vec<Vec<Option<Move>>>,
 }
 
-pub struct NegaAlpha<'a> {
+pub struct NegaAlpha {
     pub start_time: std::time::Instant,
     pub max_time: i32,
     pub num_searched: u64,
     pub max_depth: u32,
     pub max_board_number: u16,
     pub best_move_pv: Option<Move>,
-    pub eval: &'a Evaluate,
-    pub hash_table: HashTable,
+    pub eval: Evaluate,
+    pub hash_table: Vec<HashTableValue>,
     pub move_ordering: MoveOrdering,
     pub position_history: HashSet<u64>,
 }
 
-impl NegaAlpha<'_> {
+impl NegaAlpha {
     fn evaluate_diff(&mut self, pos: &mut Position, position_value: &[f32]) -> i32 {
         //! 局面の差分評価
         //!
@@ -133,7 +132,7 @@ impl NegaAlpha<'_> {
         let is_check = pos.in_check();
 
         // ムーブオーダリング
-        let mut move_list: Vec<(Move, i64)> = Vec::new();
+        let mut move_list = ArrayVec::<(Move, i64), 593>::new();
         // ムーブオーダリング用の重み計算
         for m in legal_moves {
             let mut value = 0;
@@ -238,12 +237,11 @@ impl NegaAlpha<'_> {
         }
 
         // 置換表の確認
-        let mut best_move = None;
-        let hash_table_value = self.hash_table.pos.get(&pos.key());
-        if let Some(hash_table_value) = hash_table_value {
-            if depth <= hash_table_value.depth {
-                let lower = hash_table_value.lower;
-                let upper = hash_table_value.upper;
+        let hash_table_index = pos.key() as usize % self.hash_table.len();
+        let mut best_move = if self.hash_table[hash_table_index].key == pos.key() {
+            if depth <= self.hash_table[hash_table_index].depth {
+                let lower = self.hash_table[hash_table_index].lower;
+                let upper = self.hash_table[hash_table_index].upper;
                 if lower >= beta {
                     return lower;
                 }
@@ -253,8 +251,10 @@ impl NegaAlpha<'_> {
                 alpha = alpha.max(lower);
                 beta = beta.min(upper);
             }
-            best_move = hash_table_value.best_move;
-        }
+            self.hash_table[hash_table_index].best_move
+        } else {
+            None
+        };
 
         // 探索深さ制限なら
         if depth == 0 {
@@ -314,7 +314,7 @@ impl NegaAlpha<'_> {
 
         // ムーブオーダリング
         let mut best_value = alpha;
-        let mut move_list: Vec<(Move, i64)> = Vec::new();
+        let mut move_list = ArrayVec::<(Move, i64), 593>::new();
         // ムーブオーダリング用の重み計算
         for m in legal_moves {
             let mut value = 0;
@@ -448,27 +448,20 @@ impl NegaAlpha<'_> {
         self.position_history.remove(&pos.key());
 
         // 置換表へ登録
-        let hash_table_value = self
-            .hash_table
-            .pos
-            .entry(pos.key())
-            .or_insert(HashTableValue {
-                depth: 0,
-                upper: MATING_VALUE,
-                lower: -MATING_VALUE,
-                best_move: None,
-            });
-        if depth > hash_table_value.depth {
+        if depth > self.hash_table[hash_table_index].depth {
+            self.hash_table[hash_table_index].key = pos.key();
+            self.hash_table[hash_table_index].depth = depth;
             if best_value <= alpha {
-                hash_table_value.upper = best_value;
+                self.hash_table[hash_table_index].upper = best_value;
+                self.hash_table[hash_table_index].lower = -MATING_VALUE;
             } else if best_value >= beta {
-                hash_table_value.lower = best_value;
+                self.hash_table[hash_table_index].upper = MATING_VALUE;
+                self.hash_table[hash_table_index].lower = best_value;
             } else {
-                hash_table_value.upper = best_value;
-                hash_table_value.lower = best_value;
+                self.hash_table[hash_table_index].upper = best_value;
+                self.hash_table[hash_table_index].lower = best_value;
             }
-            hash_table_value.depth = depth;
-            hash_table_value.best_move = best_move;
+            self.hash_table[hash_table_index].best_move = best_move;
         }
 
         best_value
@@ -497,29 +490,29 @@ impl NegaAlpha<'_> {
             if position_history.contains(&pos.key()) {
                 break;
             }
-            let hash_table = self.hash_table.pos.get(&pos.key());
-            if let Some(hash_table_value) = hash_table {
-                let best_move = hash_table_value.best_move;
-                if let Some(best_move) = best_move {
-                    let legal_moves = pos.legal_moves();
-                    let mut is_legal = false;
-                    for m in legal_moves {
-                        if m == best_move {
-                            is_legal = true;
-                            break;
-                        }
-                    }
-                    if !is_legal {
+            let hash_table_index = pos.key() as usize % self.hash_table.len();
+            let best_move = if self.hash_table[hash_table_index].key == pos.key() {
+                self.hash_table[hash_table_index].best_move
+            } else {
+                None
+            };
+            if let Some(best_move) = best_move {
+                let legal_moves = pos.legal_moves();
+                let mut is_legal = false;
+                for m in legal_moves {
+                    if m == best_move {
+                        is_legal = true;
                         break;
                     }
-                    pv += &move_to_sfen(best_move);
-                    pv += " ";
-                    position_history.insert(pos.key());
-                    pos.do_move(best_move);
-                    moves.push(best_move);
-                } else {
+                }
+                if !is_legal {
                     break;
                 }
+                pv += &move_to_sfen(best_move);
+                pv += " ";
+                position_history.insert(pos.key());
+                pos.do_move(best_move);
+                moves.push(best_move);
             } else {
                 break;
             }
