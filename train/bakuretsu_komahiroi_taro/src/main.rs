@@ -246,12 +246,22 @@ impl BakuretsuKomahiroiTaro {
                     piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                     killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
                 },
+                position_history: position_history.clone(),
             }
         } else {
             panic!("Cannot load evaluate model.");
         };
-        let value = nega.search(pos, position_history, false, 0, -MATING_VALUE, MATING_VALUE);
-        nega.is_eval_nyugyoku = value > 9500;
+
+        let mut position_value = vec![nega.eval.inference_diff(pos, None, None); 1];
+        let value = nega.search(
+            pos,
+            &mut position_value,
+            false,
+            0,
+            -MATING_VALUE,
+            MATING_VALUE,
+        );
+        nega.is_eval_nyugyoku = value > 8000;
 
         // 入玉宣言の確認
         if search::is_nyugyoku_win(pos) {
@@ -264,14 +274,14 @@ impl BakuretsuKomahiroiTaro {
             nega.max_depth = depth;
             let mut value = nega.search(
                 pos,
-                position_history,
+                &mut position_value,
                 false,
                 depth,
                 -MATING_VALUE,
                 MATING_VALUE,
             );
             if nega.is_eval_nyugyoku && value.abs() <= MATING_VALUE - 1000 {
-                value = (value as f32 * (16207.0 / 5676.0)) as i32;
+                value = (value as f32 * (10075.0 / 5676.0)) as i32;
             }
             let end = nega.start_time.elapsed();
             let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
