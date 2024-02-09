@@ -82,14 +82,16 @@ impl ThompsonSamplingBook {
                 if !p.ply_set(1) {
                     panic!();
                 }
-                let (alpha, beta) = if let Some(game_result) = self.book.get(&p.to_sfen_owned()) {
-                    (
-                        (game_result.black + game_result.draw) as f32,
-                        (game_result.white + game_result.draw) as f32,
-                    )
-                } else {
-                    (1.0, 1.0)
-                };
+                let (is_frequent_draw, alpha, beta) =
+                    if let Some(game_result) = self.book.get(&p.to_sfen_owned()) {
+                        (
+                            game_result.draw > game_result.black + game_result.white,
+                            (game_result.black + game_result.draw) as f32,
+                            (game_result.white + game_result.draw) as f32,
+                        )
+                    } else {
+                        (false, 1.0, 1.0)
+                    };
                 let rand_beta = Beta::new(alpha, beta)
                     .expect("The beta distribution random number generator cannot be initialized.");
                 let value = if ppos.side_to_move() == Color::Black {
@@ -97,6 +99,9 @@ impl ThompsonSamplingBook {
                 } else {
                     -rand_beta.sample(&mut self.rng)
                 };
+                if (0.495..0.505).contains(&value.abs()) && is_frequent_draw {
+                    continue;
+                }
                 if best_value < value {
                     best_value = value;
                     best_move = Some(m);
