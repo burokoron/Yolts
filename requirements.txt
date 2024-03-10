@@ -25,7 +25,7 @@ numba==0.58.1
 numpy==1.24.1
 packaging==23.2
 pathspec==0.12.1
-Pillow==9.3.0
+Pillow==10.2.0
 platformdirs==4.1.0
 pycodestyle==2.11.1
 pyflakes==3.1.0
