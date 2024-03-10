@@ -251,7 +251,7 @@ class ValidationDataset(Dataset):
 class MLP(nn.Module):
     def __init__(self, input_dim: int, output_dim: int):
         super(MLP, self).__init__()
-        self.embedding = nn.Embedding(input_dim, output_dim, padding_idx=0)
+        self.embedding = nn.Embedding(input_dim, output_dim, padding_idx=0, sparse=True)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = self.embedding(inputs)
@@ -369,7 +369,7 @@ def main(
     summary(model, input_data=torch.zeros([1, 3335], dtype=torch.int32))
     model.cuda()
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.005)
+    optimizer = optim.SparseAdam(model.parameters(), lr=0.005)
     # optimizer = optim.Adam(model.parameters(), lr=4e-05)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer, factor=0.2, patience=0, verbose=True
