@@ -2,7 +2,7 @@ use encoding::all::WINDOWS_31J;
 use encoding::{EncoderTrap, Encoding};
 use shogi_core::{Color, Move, PartialPosition, Piece, Square};
 use shogi_usi_parser::FromUsi;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::io::{stdout, Write};
 use yasai::Position;
 
@@ -16,11 +16,11 @@ struct BakuretsuKomahiroiTaro {
     engine_name: String,
     author: String,
     eval_file: String,
-    eval_model: Option<evaluate::Evaluate>,
     depth_limit: u32,
     book_file_path: String,
     narrow_book: u32,
     use_book: bool,
+    searcher: Option<search::NegaAlpha>,
 }
 
 impl BakuretsuKomahiroiTaro {
@@ -35,11 +35,11 @@ impl BakuretsuKomahiroiTaro {
             engine_name: "爆裂訓練太郎".to_string(),
             author: "burokoron".to_string(),
             eval_file: "eval.json".to_string(),
-            eval_model: None,
             depth_limit: 9,
             book_file_path: "book.json".to_string(),
             narrow_book: 10,
             use_book: true,
+            searcher: None,
         }
     }
 
@@ -73,10 +73,37 @@ impl BakuretsuKomahiroiTaro {
 
     fn isready(&mut self) {
         //! 対局の準備をする
-        //! - 評価関数の読み込み
+        //! - 探索準備
 
-        // 評価関数の読み込み
-        self.eval_model = Some(Evaluate::new(&self.eval_file));
+        // 探索準備
+        if self.searcher.is_none() {
+            self.searcher = Some(search::NegaAlpha {
+                my_turn: Color::Black,
+                start_time: std::time::Instant::now(),
+                max_time: 0,
+                num_searched: 0,
+                max_depth: 1,
+                max_board_number: 0,
+                best_move_pv: None,
+                is_eval_nyugyoku: false,
+                eval: Evaluate::new(&self.eval_file),
+                hash_table: vec![
+                    search::HashTableValue {
+                        key: 0,
+                        depth: 0,
+                        upper: MATING_VALUE,
+                        lower: -MATING_VALUE,
+                        best_move: None,
+                    };
+                    500000
+                ],
+                move_ordering: search::MoveOrdering {
+                    piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
+                    killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
+                },
+                position_history: HashSet::new(),
+            })
+        }
 
         println!("readyok");
     }
@@ -227,98 +254,101 @@ impl BakuretsuKomahiroiTaro {
             }
         }
 
-        // 現在の局面が通常の評価関数で評価値が一定以下(互角)ならそのまま、そうでないなら入玉用評価関数に変更
-        let mut nega = if let Some(ref eval_model) = self.eval_model {
-            search::NegaAlpha {
-                my_turn: pos.side_to_move(),
-                start_time: std::time::Instant::now(),
-                max_time,
-                num_searched: 0,
-                max_depth: 0,
-                max_board_number: pos.ply(),
-                best_move_pv: None,
-                is_eval_nyugyoku: false,
-                eval: eval_model,
-                hash_table: search::HashTable {
-                    pos: HashMap::new(),
-                },
-                move_ordering: search::MoveOrdering {
-                    piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
-                    killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
-                },
-                position_history: position_history.clone(),
-            }
-        } else {
-            panic!("Cannot load evaluate model.");
-        };
-
-        let mut position_value = vec![nega.eval.inference_diff(pos, None, None); 1];
-        let value = nega.search(
-            pos,
-            &mut position_value,
-            false,
-            0,
-            -MATING_VALUE,
-            MATING_VALUE,
-        );
-        nega.is_eval_nyugyoku = value > 8000;
-
-        // 入玉宣言の確認
-        if search::is_nyugyoku_win(pos) {
-            return "win".to_string();
-        }
-
-        // 通常の探索
+        // 探索部の初期化
         let mut best_move = "resign".to_string();
-        for depth in 1..=self.depth_limit {
-            nega.max_depth = depth;
-            let mut value = nega.search(
+        if let Some(ref mut searcher) = self.searcher {
+            searcher.my_turn = pos.side_to_move();
+            searcher.start_time = std::time::Instant::now();
+            searcher.max_time = max_time;
+            searcher.num_searched = 0;
+            searcher.max_depth = 1;
+            searcher.max_board_number = pos.ply();
+            searcher.best_move_pv = None;
+            searcher.is_eval_nyugyoku = false;
+            searcher.hash_table.fill(search::HashTableValue {
+                key: 0,
+                depth: 0,
+                upper: MATING_VALUE,
+                lower: -MATING_VALUE,
+                best_move: None,
+            });
+            searcher.move_ordering = search::MoveOrdering {
+                piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
+                killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
+            };
+            searcher.position_history = position_history.clone();
+
+            // 現在の局面が通常の評価関数で評価値が一定以下(互角)ならそのまま、そうでないなら入玉用評価関数に変更
+            let mut position_value = vec![searcher.eval.inference_diff(pos, None, None); 1];
+            let value = searcher.search(
                 pos,
                 &mut position_value,
                 false,
-                depth,
+                0,
                 -MATING_VALUE,
                 MATING_VALUE,
             );
-            if nega.is_eval_nyugyoku && value.abs() <= MATING_VALUE - 1000 {
-                value = (value as f32 * (10075.0 / 5676.0)) as i32;
-            }
-            let end = nega.start_time.elapsed();
-            let elapsed_time = end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
-            let nps = if elapsed_time != 0 {
-                nega.num_searched * 1000 / elapsed_time as u64
-            } else {
-                nega.num_searched
-            };
+            searcher.is_eval_nyugyoku = value > 7500;
 
-            if elapsed_time < nega.max_time {
-                best_move = {
-                    if let Some(ref m) = nega.best_move_pv {
-                        search::move_to_sfen(*m)
-                    } else {
-                        "resign".to_string()
-                    }
-                };
-                let mut pv = nega.pv_to_sfen(pos, position_history);
-                if pv.is_empty() {
-                    pv = "resign ".to_string();
-                }
-                print!(
-                    "info depth {} seldepth {} time {} nodes {} ",
+            // 入玉宣言の確認
+            if search::is_nyugyoku_win(pos) {
+                return "win".to_string();
+            }
+
+            // 探索
+            for depth in 1..=self.depth_limit {
+                searcher.max_depth = depth;
+                let mut value = searcher.search(
+                    pos,
+                    &mut position_value,
+                    false,
                     depth,
-                    nega.max_board_number - pos.ply(),
-                    elapsed_time,
-                    nega.num_searched
+                    -MATING_VALUE,
+                    MATING_VALUE,
                 );
-                println!("score cp {} pv {}nps {}", value, pv, nps);
-            } else {
-                break;
-            }
+                if searcher.is_eval_nyugyoku && value.abs() <= MATING_VALUE - 1000 {
+                    value = (value as f32 * (13184.0 / 5676.0)) as i32;
+                }
+                let end = searcher.start_time.elapsed();
+                let elapsed_time =
+                    end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
+                let nps = if elapsed_time != 0 {
+                    searcher.num_searched * 1000 / elapsed_time as u64
+                } else {
+                    searcher.num_searched
+                };
 
-            // mateなら探索終了
-            if value.abs() > MATING_VALUE - 1000 {
-                break;
+                if elapsed_time < searcher.max_time {
+                    best_move = {
+                        if let Some(ref m) = searcher.best_move_pv {
+                            search::move_to_sfen(*m)
+                        } else {
+                            "resign".to_string()
+                        }
+                    };
+                    let mut pv = searcher.pv_to_sfen(pos, position_history);
+                    if pv.is_empty() {
+                        pv = "resign ".to_string();
+                    }
+                    print!(
+                        "info depth {} seldepth {} time {} nodes {} ",
+                        depth,
+                        searcher.max_board_number - pos.ply(),
+                        elapsed_time,
+                        searcher.num_searched
+                    );
+                    println!("score cp {} pv {}nps {}", value, pv, nps);
+                } else {
+                    break;
+                }
+
+                // mateなら探索終了
+                if value.abs() > MATING_VALUE - 1000 {
+                    break;
+                }
             }
+        } else {
+            panic!("Searcher is not loaded.");
         }
 
         best_move
@@ -353,6 +383,7 @@ fn main() {
     let mut pos = Position::default();
     let mut position_history = HashSet::new();
     let tsbook = &mut extra::ThompsonSamplingBook::new();
+    tsbook.load(engine.book_file_path.clone());
 
     loop {
         // 入力の受け取り
@@ -373,7 +404,6 @@ fn main() {
             }
             "isready" => {
                 // 対局準備
-                tsbook.load(engine.book_file_path.clone());
                 engine.isready();
             }
             "setoption" => {
