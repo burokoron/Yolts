@@ -1,6 +1,6 @@
 [package]
 name = "bakuretsu_komahiroi_taro"
-version = "3.0.0"
+version = "3.0.1"
 edition = "2021"
 
 [profile.release]
@@ -9,6 +9,7 @@ lto = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+arrayvec = "0.7.4"
 encoding = "0.2.33"
 rand = "0.8.5"
 rand_distr = "0.4.3"
@@ -16,4 +17,4 @@ serde = { version = "1.0.139", features = ["derive"] }
 serde_json = "1.0.59"
 shogi_core = "0.1.4"
 shogi_usi_parser = "0.1.0"
-yasai = { git = "https://github.com/burokoron/yasai/", rev = "d38d6592a422ba9902204b74b2d1901a97166f10" }
+yasai = { git = "https://github.com/burokoron/yasai/", rev = "b7bde8287d18b343920f4a9dd7e570729dd8d0ca" }
