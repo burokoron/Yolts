@@ -92,9 +92,11 @@ impl BakuretsuKomahiroiTaro {
                         upper: MATING_VALUE,
                         lower: -MATING_VALUE,
                         best_move: None,
+                        generation: 0,
                     };
-                    20000000
+                    5000000
                 ],
+                hash_table_generation: 0,
                 move_ordering: search::MoveOrdering {
                     piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                     killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
@@ -269,13 +271,7 @@ impl BakuretsuKomahiroiTaro {
             searcher.max_depth = 1;
             searcher.max_board_number = pos.ply();
             searcher.best_move_pv = None;
-            searcher.hash_table.fill(search::HashTableValue {
-                key: 0,
-                depth: 0,
-                upper: MATING_VALUE,
-                lower: -MATING_VALUE,
-                best_move: None,
-            });
+            searcher.hash_table_generation += 1;
             searcher.move_ordering = search::MoveOrdering {
                 piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                 killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],

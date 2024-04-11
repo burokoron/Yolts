@@ -15,6 +15,7 @@ pub struct HashTableValue {
     pub upper: i32,
     pub lower: i32,
     pub best_move: Option<Move>,
+    pub generation: u32,
 }
 
 pub struct MoveOrdering {
@@ -31,6 +32,7 @@ pub struct NegaAlpha {
     pub best_move_pv: Option<Move>,
     pub eval: Evaluate,
     pub hash_table: Vec<HashTableValue>,
+    pub hash_table_generation: u32,
     pub move_ordering: MoveOrdering,
     pub position_history: HashSet<u64>,
 }
@@ -239,7 +241,9 @@ impl NegaAlpha {
         // 置換表の確認
         let hash_table_index = pos.key() as usize % self.hash_table.len();
         let mut best_move = if self.hash_table[hash_table_index].key == pos.key() {
-            if depth <= self.hash_table[hash_table_index].depth {
+            if self.hash_table_generation == self.hash_table[hash_table_index].generation
+                && depth <= self.hash_table[hash_table_index].depth
+            {
                 let lower = self.hash_table[hash_table_index].lower;
                 let upper = self.hash_table[hash_table_index].upper;
                 if lower >= beta {
@@ -294,7 +298,7 @@ impl NegaAlpha {
         {
             let value = self.evaluate_diff(pos, position_value);
             if value >= beta {
-                let reduce = 2;
+                let reduce = if depth == 2 { 2 } else { 3 };
                 pos.do_null_move();
                 let value =
                     -self.search(pos, position_value, true, depth - reduce, -beta, -beta + 1);
@@ -390,7 +394,7 @@ impl NegaAlpha {
             ));
             pos.do_move(m.0);
             // Late Move Reductions
-            if is_lmr && m.1 < 10 && move_count >= 6 && !pos.in_check() {
+            if is_lmr && move_count >= 6 && !pos.in_check() {
                 let value = -self.search(pos, position_value, false, depth - 2, -beta, -best_value);
                 if value <= best_value {
                     pos.undo_move(m.0);
@@ -403,7 +407,7 @@ impl NegaAlpha {
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
-                if is_lmr && m.1 >= 10 && move_count < 6 {
+                if is_lmr && move_count < 6 {
                     is_lmr = false;
                 }
                 if depth == self.max_depth {
@@ -448,9 +452,12 @@ impl NegaAlpha {
         self.position_history.remove(&pos.key());
 
         // 置換表へ登録
-        if depth > self.hash_table[hash_table_index].depth {
+        if self.hash_table_generation != self.hash_table[hash_table_index].generation
+            || depth > self.hash_table[hash_table_index].depth
+        {
             self.hash_table[hash_table_index].key = pos.key();
             self.hash_table[hash_table_index].depth = depth;
+            self.hash_table[hash_table_index].generation = self.hash_table_generation;
             if best_value <= alpha {
                 self.hash_table[hash_table_index].upper = best_value;
                 self.hash_table[hash_table_index].lower = -MATING_VALUE;
@@ -491,7 +498,9 @@ impl NegaAlpha {
                 break;
             }
             let hash_table_index = pos.key() as usize % self.hash_table.len();
-            let best_move = if self.hash_table[hash_table_index].key == pos.key() {
+            let best_move = if self.hash_table[hash_table_index].key == pos.key()
+                && self.hash_table_generation == self.hash_table[hash_table_index].generation
+            {
                 self.hash_table[hash_table_index].best_move
             } else {
                 None
