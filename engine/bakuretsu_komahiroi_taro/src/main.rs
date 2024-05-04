@@ -276,7 +276,7 @@ impl BakuretsuKomahiroiTaro {
                 piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                 killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
             };
-            searcher.position_history = position_history.clone();
+            searcher.position_history.clone_from(position_history);
 
             // 探索
             let mut position_value = vec![searcher.eval.inference_diff(pos, None, None); 1];
