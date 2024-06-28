@@ -1,7 +1,6 @@
 import json
 import os
 import pickle
-import shutil
 import time
 import typing
 
@@ -254,7 +253,7 @@ class MLP(nn.Module):
         self.embedding = nn.Embedding(input_dim, output_dim, padding_idx=0, sparse=True)
         self.activation = nn.Tanh()
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+    def forward(self, inputs: torch.Tensor) -> typing.Any:
         x = self.embedding(inputs)
         x = torch.sum(input=x, dim=1)
         x = x / self.value_scale
