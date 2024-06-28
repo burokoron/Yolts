@@ -85,8 +85,6 @@ class MakeFeatures:
         pieces = np.array(pieces)
         features = self._piece_relationship(pieces, bp, wp, self.features_table)
 
-        value = min([max([value, -matting_value]), matting_value])
-
         return features, value
 
     @staticmethod
@@ -155,7 +153,7 @@ class MakeFeatures:
         pieces = np.array(pieces)
         features = self._piece_relationship_reverse(pieces, bp, wp, self.features_table)
 
-        value = min([max([-value, -matting_value]), matting_value])
+        value = -value
 
         return features, value
 
@@ -200,7 +198,7 @@ class TrainDataset(Dataset):
 
         return (
             torch.tensor(batch_x, dtype=torch.int32),
-            torch.tensor(batch_y) / self.value_scale,
+            torch.tensor(np.tanh(batch_y / self.value_scale), dtype=torch.float32),
         )
 
 
@@ -244,18 +242,23 @@ class ValidationDataset(Dataset):
 
         return (
             torch.tensor(batch_x, dtype=torch.int32),
-            torch.tensor(batch_y) / self.value_scale,
+            torch.tensor(np.tanh(batch_y / self.value_scale), dtype=torch.float32),
         )
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim: int, output_dim: int):
+    def __init__(self, input_dim: int, output_dim: int, value_scale: int):
         super(MLP, self).__init__()
+        self.value_scale = value_scale
+
         self.embedding = nn.Embedding(input_dim, output_dim, padding_idx=0, sparse=True)
+        self.activation = nn.Tanh()
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = self.embedding(inputs)
-        outputs = torch.sum(input=x, dim=1)
+        x = torch.sum(input=x, dim=1)
+        x = x / self.value_scale
+        outputs = self.activation(x)
         return outputs
 
 
@@ -328,8 +331,8 @@ def main(
 
     del same_sfen
     # """
-    # train_file_number = 26594
-    # test_file_number = 2998
+    # train_file_number = 29579
+    # test_file_number = 3436
     train_dataset = TrainDataset(
         root_path=tmp_path,
         train_file_number=train_file_number + 1,
@@ -363,7 +366,7 @@ def main(
     print(test_file_number * batch_size + len(x_test) * 2)
 
     # 学習
-    model = MLP(input_dim=17346050, output_dim=1)
+    model = MLP(input_dim=17346050, output_dim=1, value_scale=value_scale)
     model.embedding.weight.data.zero_()
     # model.load_state_dict(torch.load(os.path.join(checkpoint_path, "checkpoint_epoch_20.pt")))
     summary(model, input_data=torch.zeros([1, 3335], dtype=torch.int32))
@@ -372,12 +375,12 @@ def main(
     optimizer = optim.SparseAdam(model.parameters(), lr=0.005)
     # optimizer = optim.Adam(model.parameters(), lr=4e-05)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer=optimizer, factor=0.2, patience=0, verbose=True
+        optimizer=optimizer, factor=0.2, patience=0, threshold=1e-5, verbose=True
     )
     # early_stopping用
     best_epoch = 0
     best_validation_loss = 1e9
-    early_stopping_threshold = 0.0001
+    early_stopping_threshold = 1e-5
     early_stopping_patience = 1
     os.mkdir(checkpoint_path)
     for epoch in range(1000):
@@ -439,16 +442,13 @@ def main(
     eval_json: typing.TextIO = open("eval.json", "w")
     json.dump({"params": params}, eval_json)
 
-    # 一時保存用フォルダの削除
-    shutil.rmtree(tmp_path)
-
 
 if __name__ == "__main__":
     root_path = "./kifu"  # 学習棋譜があるルートフォルダ
     tmp_path = "./tmp"  # 一時保存データ用のフォルダ
     checkpoint_path = "./checkpoint"  # モデルチェックポイントを保存するフォルダ
-    matting_value = 10075  # 勝ち(負け)を読み切ったときの評価値
-    value_scale = 512  # 学習時の評価値スケーリングパラメータ
+    matting_value = 13184  # 勝ち(負け)を読み切ったときの評価値
+    value_scale = 2034  # 学習時の評価値スケーリングパラメータ
     train_ratio = 0.9  # 学習に使用する棋譜ファイルの割合
     batch_size = 8192  # バッチサイズ
 
