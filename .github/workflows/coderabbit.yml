@@ -19,7 +19,7 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-latest
-    if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '[run review]') && github.event.issue.pull_request) ||　(github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '[run review]')) || (github.event_name == 'pull_request' && !contains(github.event.pull_request.title, 'release') && !contains(github.event.pull_request.title, 'Release'))
+    if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '[run review]') && github.event.issue.pull_request) || (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '[run review]')) || (github.event_name == 'pull_request' && !contains(github.event.pull_request.title, 'release') && !contains(github.event.pull_request.title, 'Release'))
     timeout-minutes: 15
     steps:
       - uses: coderabbitai/openai-pr-reviewer@latest
@@ -30,8 +30,8 @@ jobs:
           debug: false
           review_simple_changes: false
           review_comment_lgtm: false
-          openai_light_model: gpt-4-turbo-preview # 好きに変更して
-          openai_heavy_model: gpt-4-turbo-preview # 好きに変更して。本家曰く、gpt-4 推奨（ただし、値段に注意）
+          openai_light_model: gpt-4o # 好きに変更して
+          openai_heavy_model: gpt-4o # 好きに変更して。本家曰く、gpt-4 推奨（ただし、値段に注意）
           openai_timeout_ms: 900000 # 15 mins. Timeout for OpenAI API call in millis
           language: ja-JP
           path_filters: |
