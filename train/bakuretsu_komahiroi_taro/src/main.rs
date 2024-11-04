@@ -94,9 +94,11 @@ impl BakuretsuKomahiroiTaro {
                         upper: MATING_VALUE,
                         lower: -MATING_VALUE,
                         best_move: None,
+                        generation: 0,
                     };
-                    500000
+                    5000000
                 ],
+                hash_table_generation: 0,
                 move_ordering: search::MoveOrdering {
                     piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                     killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
@@ -118,7 +120,10 @@ impl BakuretsuKomahiroiTaro {
         //!     - 設定する値
 
         match &name[..] {
-            "EvalFile" => self.eval_file = value,
+            "EvalFile" => {
+                self.eval_file = value;
+                self.searcher = None;
+            }
             "DepthLimit" => {
                 self.depth_limit = value
                     .parse()
@@ -264,14 +269,8 @@ impl BakuretsuKomahiroiTaro {
             searcher.max_depth = 1;
             searcher.max_board_number = pos.ply();
             searcher.best_move_pv = None;
+            searcher.hash_table_generation += 1;
             searcher.is_eval_nyugyoku = false;
-            searcher.hash_table.fill(search::HashTableValue {
-                key: 0,
-                depth: 0,
-                upper: MATING_VALUE,
-                lower: -MATING_VALUE,
-                best_move: None,
-            });
             searcher.move_ordering = search::MoveOrdering {
                 piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                 killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
@@ -288,7 +287,7 @@ impl BakuretsuKomahiroiTaro {
                 -MATING_VALUE,
                 MATING_VALUE,
             );
-            searcher.is_eval_nyugyoku = value > 7500;
+            searcher.is_eval_nyugyoku = value > 8500;
 
             // 入玉宣言の確認
             if search::is_nyugyoku_win(pos) {
@@ -307,7 +306,7 @@ impl BakuretsuKomahiroiTaro {
                     MATING_VALUE,
                 );
                 if searcher.is_eval_nyugyoku && value.abs() <= MATING_VALUE - 1000 {
-                    value = (value as f32 * (13184.0 / 5676.0)) as i32;
+                    value = (value as f32 * (11110.0 / 5676.0)) as i32;
                 }
                 let end = searcher.start_time.elapsed();
                 let elapsed_time =

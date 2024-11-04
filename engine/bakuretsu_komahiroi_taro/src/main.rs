@@ -496,7 +496,9 @@ mod tests {
         let path = "test/go.json";
 
         let eval = evaluate::EvalJson {
-            params: vec![0.; 38644290],
+            embedding: vec![vec![0.; 2]; 17346050],
+            conv: vec![vec![vec![0.; 3335]; 1]; 2],
+            dense: vec![vec![0.; 2]; 1],
         };
         let mut file = std::fs::File::create(path).unwrap();
         let value = serde_json::to_string(&eval).unwrap();
