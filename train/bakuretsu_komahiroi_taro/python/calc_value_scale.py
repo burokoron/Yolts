@@ -1,9 +1,10 @@
 import os
-from tqdm import tqdm
 import pickle
 import typing
+
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 
 def main(root_path: str, limit_value: int) -> None:
