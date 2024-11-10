@@ -161,7 +161,7 @@ impl NegaAlpha {
                     }
                 }
             }
-            if is_check || value > 0 {
+            if is_check || pos.is_check_move(m) || value > 0 {
                 move_list.push((m, value));
             }
         }
