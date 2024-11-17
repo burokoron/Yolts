@@ -394,7 +394,7 @@ impl NegaAlpha {
             ));
             pos.do_move(m.0);
             // Late Move Reductions
-            if is_lmr && move_count >= 6 && !pos.in_check() {
+            if is_lmr && move_count >= 11 && !pos.in_check() {
                 let value = -self.search(pos, position_value, false, depth - 2, -beta, -best_value);
                 if value <= best_value {
                     pos.undo_move(m.0);
@@ -407,7 +407,7 @@ impl NegaAlpha {
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
-                if is_lmr && move_count < 6 {
+                if is_lmr && move_count < 11 {
                     is_lmr = false;
                 }
                 if depth == self.max_depth {
