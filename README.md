@@ -20,29 +20,32 @@
 ## イロレーティング
 
 [QRL Software rating](https://www.qhapaq.org/shogi/)基準のレーティング
-| エンジン名 | レーティング |  
+| エンジン名 | レーティング |
 | :---: | ---: |
-| RandamKun V 1.0.0 | 127 |
-| 爆裂駒捨太郎 V 1.0.0 | 321 |
-| 爆裂駒捨太郎 V 1.1.0 | 437 |
-| 爆裂駒捨太郎 V 2.0.0 | 516 |
-| 爆裂駒捨太郎 V 2.1.0 | 595 |
-| 爆裂駒捨太郎 V 2.2.0 | 650 |
-| 爆裂駒捨太郎 V 2.2.1 | - |
-| 爆裂駒捨太郎 V 2.3.0 | 712 |
-| 爆裂駒捨太郎R V 0.5.0 | - |
-| 爆裂駒捨太郎R V 1.0.0 | 754 |
-| 爆裂転生太郎 V 1.0.1 | 931 |
-| 爆裂転生太郎 V 2.0.2 | 1017 |
-| 爆裂駒拾太郎 V 1.0.0 | 1238 |
-| 爆裂駒拾太郎 V 1.1.0 | 1310 |
-| 爆裂駒拾太郎 V 1.2.0 | 1405 |
-| 爆裂駒拾太郎 V 2.2.0 | 1420 |
-| 爆裂駒拾太郎 V 2.2.3 | 1598 |
-| 爆裂駒拾太郎 V 2.2.4 | 1642 |
+| [RandamKun V 1.0.0](https://github.com/burokoron/Yolts/releases/tag/v0.0.1) | 127 |
+| [爆裂駒捨太郎 V 1.0.0](https://github.com/burokoron/Yolts/releases/tag/v0.1.0) | 321 |
+| [爆裂駒捨太郎 V 1.1.0](https://github.com/burokoron/Yolts/releases/tag/v0.2.0) | 437 |
+| [爆裂駒捨太郎 V 2.0.0](https://github.com/burokoron/Yolts/releases/tag/v1.0.0) | 516 |
+| [爆裂駒捨太郎 V 2.1.0](https://github.com/burokoron/Yolts/releases/tag/v1.1.0) | 595 |
+| [爆裂駒捨太郎 V 2.2.0](https://github.com/burokoron/Yolts/releases/tag/v1.2.0) | 650 |
+| [爆裂駒捨太郎 V 2.2.1](https://github.com/burokoron/Yolts/releases/tag/v1.2.1) | - |
+| [爆裂駒捨太郎 V 2.3.0](https://github.com/burokoron/Yolts/releases/tag/v1.3.0) | 712 |
+| [爆裂駒捨太郎R V 0.5.0](https://github.com/burokoron/Yolts/releases/tag/v1.3.1) | - |
+| [爆裂駒捨太郎R V 1.0.0](https://github.com/burokoron/Yolts/releases/tag/v1.4.0) | 754 |
+| [爆裂転生太郎 V 1.0.1](https://github.com/burokoron/Yolts/releases/tag/v2.0.0) | 931 |
+| [爆裂転生太郎 V 2.0.2](https://github.com/burokoron/Yolts/releases/tag/v2.1.2) | 1017 |
+| [爆裂駒拾太郎 V 1.0.0](https://github.com/burokoron/Yolts/releases/tag/v3.0.0) | 1238 |
+| [爆裂駒拾太郎 V 1.1.0](https://github.com/burokoron/Yolts/releases/tag/v3.1.0) | 1310 |
+| [爆裂駒拾太郎 V 1.2.0](https://github.com/burokoron/Yolts/releases/tag/v3.2.0) | 1405 |
+| [爆裂駒拾太郎 V 2.2.0](https://github.com/burokoron/Yolts/releases/tag/v3.6.0) | 1420 |
+| [爆裂駒拾太郎 V 2.2.3](https://github.com/burokoron/Yolts/releases/tag/v3.6.3) | 1598 |
+| [爆裂駒拾太郎 V 2.2.4](https://github.com/burokoron/Yolts/releases/tag/v3.6.4) | 1642 |
+| [爆裂駒拾太郎 V 3.0.2](https://github.com/burokoron/Yolts/releases/tag/v4.0.2) | 1714 |
 
 ## 更新履歴
 
+- 2024/12/04
+  - 爆裂駒拾太郎 V 3.0.2のレーティングを計測(R1714)
 - 2024/11/18
   - 爆裂駒拾太郎 V 3.0.2にアップデート
     - Late Move Reductionsの調整
