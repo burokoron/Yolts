@@ -42,6 +42,7 @@ pysen==0.10.5
 python-dateutil==2.9.0.post0
 requests==2.28.1
 rich==13.7.0
+schedulefree==1.4
 six==1.16.0
 smmap==5.0.1
 sympy==1.12

@@ -8,7 +8,7 @@ import cshogi
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
+from schedulefree import RAdamScheduleFree
 from numba import njit
 from torch.utils.data import DataLoader, Dataset
 from torchinfo import summary
@@ -17,15 +17,14 @@ from tqdm import tqdm
 
 class MakeFeatures:
     def __init__(self) -> None:
-        self.features_table = np.zeros((2, 95, 31, 95, 31), dtype=np.uint32)
+        self.features_table = np.zeros((95, 31, 95, 31), dtype=np.uint32)
         idx = 0
-        for i in range(2):
-            for j in range(95):
-                for k in range(31):
-                    for m in range(95):
-                        for n in range(31):
-                            self.features_table[i][j][k][m][n] = idx
-                            idx += 1
+        for i in range(95):
+            for j in range(31):
+                for k in range(95):
+                    for m in range(31):
+                        self.features_table[i][j][k][m] = idx
+                        idx += 1
 
     @staticmethod
     @njit
@@ -55,19 +54,19 @@ class MakeFeatures:
                 if pieces[i] == 0 or pieces[j] == 0:
                     features[idx] = 0
                 else:
-                    features[idx] = features_table[0][i][pieces[i]][j][pieces[j]]
+                    features[idx] = features_table[i][pieces[i]][j][pieces[j]]
                 idx += 1
         for i in range(len(bp)):
             if bp[i] == 0:
                 features[idx] = 0
             else:
-                features[idx] = features_table[0][0][0][81 + i][bp[i]]
+                features[idx] = features_table[0][0][81 + i][bp[i]]
             idx += 1
         for i in range(len(wp)):
             if wp[i] == 0:
                 features[idx] = 0
             else:
-                features[idx] = features_table[0][0][0][88 + i][wp[i]]
+                features[idx] = features_table[0][0][88 + i][wp[i]]
             idx += 1
 
         return features
@@ -119,7 +118,7 @@ class MakeFeatures:
                 if pieces_rev[i] == 0 or pieces_rev[j] == 0:
                     features[idx] = 0
                 else:
-                    features[idx] = features_table[0][i][pieces_rev[i]][j][
+                    features[idx] = features_table[i][pieces_rev[i]][j][
                         pieces_rev[j]
                     ]
                 idx += 1
@@ -127,13 +126,13 @@ class MakeFeatures:
             if wp[i] == 0:
                 features[idx] = 0
             else:
-                features[idx] = features_table[0][0][0][81 + i][wp[i]]
+                features[idx] = features_table[0][0][81 + i][wp[i]]
             idx += 1
         for i in range(len(bp)):
             if bp[i] == 0:
                 features[idx] = 0
             else:
-                features[idx] = features_table[0][0][0][88 + i][bp[i]]
+                features[idx] = features_table[0][0][88 + i][bp[i]]
             idx += 1
 
         return features
@@ -235,14 +234,14 @@ class MLP(nn.Module):
     def __init__(self) -> None:
         super(MLP, self).__init__()
 
-        self.embedding = nn.Embedding(17346050, 2, padding_idx=0, sparse=True)
+        self.embedding = nn.Embedding(8673025, 4, padding_idx=0)
 
         self.conv = nn.Conv1d(
-            in_channels=2, out_channels=2, kernel_size=3335, groups=2, bias=False
+            in_channels=4, out_channels=4, kernel_size=3335, groups=4, bias=False
         )
         self.activation_1 = nn.Hardswish()
 
-        self.dense = nn.Linear(in_features=2, out_features=1, bias=False)
+        self.dense = nn.Linear(in_features=4, out_features=1, bias=False)
         self.activation_2 = nn.Tanh()
 
     def forward(self, inputs: torch.Tensor) -> typing.Any:
@@ -299,7 +298,7 @@ def main(
                         continue
                     else:
                         same_sfen.add(" ".join(sfen.split(" ")[:-1]))
-                    if int(key) % 10 == 0:
+                    if int(key) % 20 == 0:
                         x_test.append(sfen)
                         y_test.append(value)
                     elif i < int(len(file_list) * train_ratio):
@@ -327,8 +326,8 @@ def main(
 
     del same_sfen
     # """
-    # train_file_number = 30973
-    # test_file_number = 3682
+    # train_file_number = 27945
+    # test_file_number = 1397
     train_dataset = TrainDataset(
         root_path=tmp_path,
         train_file_number=train_file_number + 1,
@@ -366,44 +365,38 @@ def main(
     summary(model, input_data=torch.zeros([1, 3335], dtype=torch.int32))
     model.cuda()
     criterion = nn.MSELoss()
-    optimizer_1 = optim.SparseAdam(model.embedding.parameters(), lr=0.005)
-    # optimizer_1 = optim.SparseAdam(model.embedding.parameters(), lr=0.0001)
-    optimizer_2 = optim.Adam(
-        [
-            {"params": model.conv.parameters()},
-            {"params": model.dense.parameters()},
-        ],
+    optimizer = RAdamScheduleFree(
+        model.parameters(),
         lr=0.005,
-    )
-    # ], lr=0.0001)
-    scheduler_1 = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer=optimizer_1, factor=0.2, patience=0, threshold=1e-5
-    )
-    scheduler_2 = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer=optimizer_2, factor=0.2, patience=0, threshold=1e-5
+        betas=(0.9, 0.999),
+        weight_decay=1e-4,
     )
     # early_stopping用
     best_epoch = 0
     best_validation_loss = 1e9
     early_stopping_threshold = 1e-5
-    early_stopping_patience = 1
-    # 学習率確認用
-    last_learning_rate = 0.0
-    # os.mkdir(checkpoint_path)
+    early_stopping_patience = 0
+    os.mkdir(checkpoint_path)
     # 事前に評価データ生成用スレッドを立てておく
     model.eval()
+    optimizer.eval()
     validation_loss = 0.0
     with tqdm(validation_data_loader, leave=False) as pbar:
         for i, data in enumerate(pbar):
             inputs, labels = data
+            inputs, labels = inputs.cuda(), labels.cuda()
+
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+
+            validation_loss += loss.item()
+
             pbar.set_description("validation init")
+            pbar.set_postfix(ordered_dict={"loss": validation_loss / (i + 1)})
     for epoch in range(1000):
-        # 学習率が変わっていたらログ表示
-        if last_learning_rate != scheduler_1.get_last_lr()[0]:
-            last_learning_rate = scheduler_1.get_last_lr()[0]
-            print(f"lerning rate: {last_learning_rate}")
         # 学習
         model.train()
+        optimizer.train()
         train_loss = 0.0
         start_time = time.time()
         with tqdm(train_data_loader, leave=False) as pbar:
@@ -411,13 +404,12 @@ def main(
                 inputs, labels = data
                 inputs, labels = inputs.cuda(), labels.cuda()
 
-                optimizer_1.zero_grad()
-                optimizer_2.zero_grad()
+                optimizer.zero_grad()
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
+
                 loss.backward()
-                optimizer_1.step()  # type:ignore
-                optimizer_2.step()
+                optimizer.step()
 
                 train_loss += loss.item()
 
@@ -425,6 +417,7 @@ def main(
                 pbar.set_postfix(ordered_dict={"loss": train_loss / (i + 1)})
         # 評価
         model.eval()
+        optimizer.eval()
         validation_loss = 0.0
         with tqdm(validation_data_loader, leave=False) as pbar:
             for i, data in enumerate(pbar):
@@ -449,8 +442,6 @@ def main(
         torch.save(
             model.state_dict(), f"{checkpoint_path}/checkpoint_epoch_{epoch + 1}.pt"
         )
-        scheduler_1.step(validation_loss)
-        scheduler_2.step(validation_loss)
         if validation_loss + early_stopping_threshold < best_validation_loss:
             best_epoch = epoch
             best_validation_loss = validation_loss
@@ -488,8 +479,8 @@ if __name__ == "__main__":
     root_path = "./kifu"  # 学習棋譜があるルートフォルダ
     tmp_path = "./tmp"  # 一時保存データ用のフォルダ
     checkpoint_path = "./checkpoint"  # モデルチェックポイントを保存するフォルダ
-    value_scale = 2499  # 学習時の評価値スケーリングパラメータ
-    train_ratio = 0.9  # 学習に使用する棋譜ファイルの割合
+    value_scale = 2361  # 学習時の評価値スケーリングパラメータ
+    train_ratio = 1.0  # 学習に使用する棋譜ファイルの割合
     batch_size = 8192  # バッチサイズ
 
     main(
