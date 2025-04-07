@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use shogi_core::{Color, Move, PieceKind, Square};
 use yasai::Position;
 
-pub const VALUE_SCALE: f32 = 2499.;
+pub const VALUE_SCALE: f32 = 2361.;
 
 #[derive(Deserialize, Serialize)]
 pub struct EvalJson {
@@ -11,8 +11,9 @@ pub struct EvalJson {
     pub dense: Vec<Vec<f32>>,
 }
 
+// PPeX
 pub struct Evaluate {
-    pub token: Vec<Vec<Vec<Vec<Vec<usize>>>>>,
+    pub token: Vec<Vec<Vec<Vec<usize>>>>,
     pub embedding: Vec<Vec<f32>>,
     pub conv_idx: [[usize; 81]; 81],
     pub conv: Vec<Vec<Vec<f32>>>,
@@ -41,16 +42,15 @@ impl Evaluate {
         let eval_json: EvalJson =
             serde_json::from_reader(reader).expect("Cannot read evaluate file.");
 
-        let mut token = vec![vec![vec![vec![vec![0usize; 31]; 95]; 31]; 95]; 2];
+        // PPeX
+        let mut token = vec![vec![vec![vec![0usize; 31]; 95]; 31]; 95];
         let mut idx = 0;
         for i in token.iter_mut() {
             for j in i.iter_mut() {
                 for k in j.iter_mut() {
                     for m in k.iter_mut() {
-                        for n in m.iter_mut() {
-                            *n = idx;
-                            idx += 1;
-                        }
+                        *m = idx;
+                        idx += 1;
                     }
                 }
             }
@@ -80,8 +80,8 @@ impl Evaluate {
         &self,
         pos: &Position,
         mv: Option<Move>,
-        out_conv: Option<(f32, [f32; 2])>,
-    ) -> (f32, [f32; 2]) {
+        out_conv: Option<(f32, [f32; 4])>,
+    ) -> (f32, [f32; 4]) {
         //! 局面を差分評価する
         //!
         //! - Arguments
@@ -89,17 +89,17 @@ impl Evaluate {
         //!     - 評価したい局面
         //!   - mv: Move
         //!     - posからの指し手
-        //!   - mut out_conv: (f32, [f32; 2])
+        //!   - mut out_conv: (f32, [f32; 4])
         //!     - posの評価値と中間出力
         //! - Returns
-        //!   - value: (f32, [f32; 2])
+        //!   - value: (f32, [f32; 4])
         //!     - (評価値, 2層目出力)
 
+        let hidden_size = 4;
         // 差分計算元がない場合
         if mv.is_none() || out_conv.is_none() {
             // 埋め込み層 PP
-            let mut out_embedding = [[0f32; 2]; 3335];
-            let hidden_size = 2;
+            let mut out_embedding = [[0f32; 4]; 3335];
             let mut idx = 0;
             // 盤面
             for sq1 in Square::all() {
@@ -111,10 +111,11 @@ impl Evaluate {
                     if let Some(pc1) = pc1 {
                         let pc2 = pos.piece_at(sq2);
                         if let Some(pc2) = pc2 {
-                            let token = self.token[0][sq1.array_index()][pc1.as_u8() as usize]
+                            let token = self.token[sq1.array_index()][pc1.as_u8() as usize]
                                 [sq2.array_index()][pc2.as_u8() as usize];
-                            out_embedding[idx][0] = self.embedding[token][0];
-                            out_embedding[idx][1] = self.embedding[token][1];
+                            for i in 0..hidden_size {
+                                out_embedding[idx][i] = self.embedding[token][i];
+                            }
                         }
                     }
                     idx += 1;
@@ -130,9 +131,10 @@ impl Evaluate {
                     }
                     let count = hand.Hand_count(piece_type) as usize;
                     if count != 0 {
-                        let token = self.token[0][0][0][hand_idx][count];
-                        out_embedding[idx][0] = self.embedding[token][0];
-                        out_embedding[idx][1] = self.embedding[token][1];
+                        let token = self.token[0][0][hand_idx][count];
+                        for i in 0..hidden_size {
+                            out_embedding[idx][i] = self.embedding[token][i];
+                        }
                     }
                     idx += 1;
                     hand_idx += 1;
@@ -140,7 +142,7 @@ impl Evaluate {
             }
 
             // 畳み込み層
-            let mut out_conv = [0f32; 2];
+            let mut out_conv = [0f32; 4];
             for (i, out_embed) in out_embedding.iter().enumerate() {
                 for j in 0..hidden_size {
                     out_conv[j] += out_embed[j] * self.conv[j][0][i];
@@ -148,7 +150,7 @@ impl Evaluate {
             }
 
             // 活性化関数_1
-            let mut out_activation_1 = [0f32; 2];
+            let mut out_activation_1 = [0f32; 4];
             for i in 0..hidden_size {
                 if out_conv[i] <= -3.0 {
                     out_activation_1[i] = 0.0;
@@ -199,54 +201,61 @@ impl Evaluate {
                 if let Some(pc) = pos.piece_at(sq) {
                     // 移動元
                     if sq.array_index() <= from.array_index() {
-                        let token = self.token[0][sq.array_index()][pc.as_u8() as usize]
+                        let token = self.token[sq.array_index()][pc.as_u8() as usize]
                             [from.array_index()][from_piece.as_u8() as usize];
                         let idx = self.conv_idx[sq.array_index()][from.array_index()];
-                        out_conv[0] -= self.embedding[token][0] * self.conv[0][0][idx];
-                        out_conv[1] -= self.embedding[token][1] * self.conv[1][0][idx];
+                        for (i, out) in out_conv.iter_mut().enumerate() {
+                            *out -= self.embedding[token][i] * self.conv[i][0][idx];
+                        }
                     } else {
-                        let token = self.token[0][from.array_index()][from_piece.as_u8() as usize]
+                        let token = self.token[from.array_index()][from_piece.as_u8() as usize]
                             [sq.array_index()][pc.as_u8() as usize];
                         let idx = self.conv_idx[from.array_index()][sq.array_index()];
-                        out_conv[0] -= self.embedding[token][0] * self.conv[0][0][idx];
-                        out_conv[1] -= self.embedding[token][1] * self.conv[1][0][idx];
+                        for (i, out) in out_conv.iter_mut().enumerate() {
+                            *out -= self.embedding[token][i] * self.conv[i][0][idx];
+                        }
                     }
                     // 移動先
                     if sq.array_index() <= to.array_index() {
-                        let token = self.token[0][sq.array_index()][pc.as_u8() as usize]
+                        let token = self.token[sq.array_index()][pc.as_u8() as usize]
                             [to.array_index()][from_to_piece.as_u8() as usize];
                         let idx = self.conv_idx[sq.array_index()][to.array_index()];
-                        out_conv[0] += self.embedding[token][0] * self.conv[0][0][idx];
-                        out_conv[1] += self.embedding[token][1] * self.conv[1][0][idx];
+                        for (i, out) in out_conv.iter_mut().enumerate() {
+                            *out += self.embedding[token][i] * self.conv[i][0][idx];
+                        }
                     } else {
-                        let token = self.token[0][to.array_index()][from_to_piece.as_u8() as usize]
+                        let token = self.token[to.array_index()][from_to_piece.as_u8() as usize]
                             [sq.array_index()][pc.as_u8() as usize];
                         let idx = self.conv_idx[to.array_index()][sq.array_index()];
-                        out_conv[0] += self.embedding[token][0] * self.conv[0][0][idx];
-                        out_conv[1] += self.embedding[token][1] * self.conv[1][0][idx];
+                        for (i, out) in out_conv.iter_mut().enumerate() {
+                            *out += self.embedding[token][i] * self.conv[i][0][idx];
+                        }
                     }
                 }
             }
             // 移動元×移動先の2駒関係が過剰に足されているので引く
             if from.array_index() <= to.array_index() {
-                let token = self.token[0][from.array_index()][from_piece.as_u8() as usize]
+                let token = self.token[from.array_index()][from_piece.as_u8() as usize]
                     [to.array_index()][from_to_piece.as_u8() as usize];
                 let idx = self.conv_idx[from.array_index()][to.array_index()];
-                out_conv[0] -= self.embedding[token][0] * self.conv[0][0][idx];
-                out_conv[1] -= self.embedding[token][1] * self.conv[1][0][idx];
+                for (i, out) in out_conv.iter_mut().enumerate() {
+                    *out -= self.embedding[token][i] * self.conv[i][0][idx];
+                }
             } else {
-                let token = self.token[0][to.array_index()][from_to_piece.as_u8() as usize]
+                let token = self.token[to.array_index()][from_to_piece.as_u8() as usize]
                     [from.array_index()][from_piece.as_u8() as usize];
                 let idx = self.conv_idx[to.array_index()][from.array_index()];
-                out_conv[0] -= self.embedding[token][0] * self.conv[0][0][idx];
-                out_conv[1] -= self.embedding[token][1] * self.conv[1][0][idx];
+                for (i, out) in out_conv.iter_mut().enumerate() {
+                    *out -= self.embedding[token][i] * self.conv[i][0][idx];
+                }
             }
             // 移動先の1駒関係が足せていないのでここで足す
-            let token = self.token[0][to.array_index()][from_to_piece.as_u8() as usize]
+            let token = self.token[to.array_index()][from_to_piece.as_u8() as usize]
                 [to.array_index()][from_to_piece.as_u8() as usize];
             let idx = self.conv_idx[to.array_index()][to.array_index()];
-            out_conv[0] += self.embedding[token][0] * self.conv[0][0][idx];
-            out_conv[1] += self.embedding[token][1] * self.conv[1][0][idx];
+            for (i, out) in out_conv.iter_mut().enumerate() {
+                *out += self.embedding[token][i] * self.conv[i][0][idx];
+            }
 
             // 駒取りの場合は追加
             if let Some(to_piece) = pos.piece_at(to) {
@@ -255,33 +264,37 @@ impl Evaluate {
                     if let Some(pc) = pos.piece_at(sq) {
                         // 移動先
                         if sq.array_index() <= to.array_index() {
-                            let token = self.token[0][sq.array_index()][pc.as_u8() as usize]
+                            let token = self.token[sq.array_index()][pc.as_u8() as usize]
                                 [to.array_index()][to_piece.as_u8() as usize];
                             let idx = self.conv_idx[sq.array_index()][to.array_index()];
-                            out_conv[0] -= self.embedding[token][0] * self.conv[0][0][idx];
-                            out_conv[1] -= self.embedding[token][1] * self.conv[1][0][idx];
+                            for (i, out) in out_conv.iter_mut().enumerate() {
+                                *out -= self.embedding[token][i] * self.conv[i][0][idx];
+                            }
                         } else {
-                            let token = self.token[0][to.array_index()][to_piece.as_u8() as usize]
+                            let token = self.token[to.array_index()][to_piece.as_u8() as usize]
                                 [sq.array_index()][pc.as_u8() as usize];
                             let idx = self.conv_idx[to.array_index()][sq.array_index()];
-                            out_conv[0] -= self.embedding[token][0] * self.conv[0][0][idx];
-                            out_conv[1] -= self.embedding[token][1] * self.conv[1][0][idx];
+                            for (i, out) in out_conv.iter_mut().enumerate() {
+                                *out -= self.embedding[token][i] * self.conv[i][0][idx];
+                            }
                         }
                     }
                 }
                 // 移動元×移動先の2駒関係が過剰に引かれているので足す
                 if from.array_index() <= to.array_index() {
-                    let token = self.token[0][from.array_index()][from_piece.as_u8() as usize]
+                    let token = self.token[from.array_index()][from_piece.as_u8() as usize]
                         [to.array_index()][to_piece.as_u8() as usize];
                     let idx = self.conv_idx[from.array_index()][to.array_index()];
-                    out_conv[0] += self.embedding[token][0] * self.conv[0][0][idx];
-                    out_conv[1] += self.embedding[token][1] * self.conv[1][0][idx];
+                    for (i, out) in out_conv.iter_mut().enumerate() {
+                        *out += self.embedding[token][i] * self.conv[i][0][idx];
+                    }
                 } else {
-                    let token = self.token[0][to.array_index()][to_piece.as_u8() as usize]
+                    let token = self.token[to.array_index()][to_piece.as_u8() as usize]
                         [from.array_index()][from_piece.as_u8() as usize];
                     let idx = self.conv_idx[to.array_index()][from.array_index()];
-                    out_conv[0] += self.embedding[token][0] * self.conv[0][0][idx];
-                    out_conv[1] += self.embedding[token][1] * self.conv[1][0][idx];
+                    for (i, out) in out_conv.iter_mut().enumerate() {
+                        *out += self.embedding[token][i] * self.conv[i][0][idx];
+                    }
                 }
                 // 持ち駒
                 let turn = pos.side_to_move();
@@ -298,18 +311,18 @@ impl Evaluate {
                 let count = pos.hand(turn).count(piece_kind);
                 if let Some(count) = count {
                     let token =
-                        self.token[0][0][0][idx + piece_kind.array_index()][count as usize + 1];
-                    out_conv[0] += self.embedding[token][0]
-                        * self.conv[0][0][3321 - 81 + idx + piece_kind.array_index()];
-                    out_conv[1] += self.embedding[token][1]
-                        * self.conv[1][0][3321 - 81 + idx + piece_kind.array_index()];
+                        self.token[0][0][idx + piece_kind.array_index()][count as usize + 1];
+                    for (i, out) in out_conv.iter_mut().enumerate() {
+                        *out += self.embedding[token][i]
+                            * self.conv[i][0][3321 - 81 + idx + piece_kind.array_index()];
+                    }
                     if count > 0 {
                         let token =
-                            self.token[0][0][0][idx + piece_kind.array_index()][count as usize];
-                        out_conv[0] -= self.embedding[token][0]
-                            * self.conv[0][0][3321 - 81 + idx + piece_kind.array_index()];
-                        out_conv[1] -= self.embedding[token][1]
-                            * self.conv[1][0][3321 - 81 + idx + piece_kind.array_index()];
+                            self.token[0][0][idx + piece_kind.array_index()][count as usize];
+                        for (i, out) in out_conv.iter_mut().enumerate() {
+                            *out -= self.embedding[token][i]
+                                * self.conv[i][0][3321 - 81 + idx + piece_kind.array_index()];
+                        }
                     }
                 } else {
                     panic!("Can not capture piece.");
@@ -317,8 +330,8 @@ impl Evaluate {
             }
 
             // 活性化関数_1
-            let mut out_activation_1 = [0f32; 2];
-            for i in 0..2 {
+            let mut out_activation_1 = [0f32; 4];
+            for i in 0..hidden_size {
                 if out_conv[i] <= -3.0 {
                     out_activation_1[i] = 0.0;
                 } else if out_conv[i] >= 3.0 {
@@ -348,18 +361,18 @@ impl Evaluate {
             let piece_kind = piece.piece_kind();
             let count = pos.hand(turn).count(piece_kind);
             if let Some(count) = count {
-                let token = self.token[0][0][0][idx + piece_kind.array_index()][count as usize];
-                out_conv[0] -= self.embedding[token][0]
-                    * self.conv[0][0][3321 - 81 + idx + piece_kind.array_index()];
-                out_conv[1] -= self.embedding[token][1]
-                    * self.conv[1][0][3321 - 81 + idx + piece_kind.array_index()];
+                let token = self.token[0][0][idx + piece_kind.array_index()][count as usize];
+                for (i, out) in out_conv.iter_mut().enumerate() {
+                    *out -= self.embedding[token][i]
+                        * self.conv[i][0][3321 - 81 + idx + piece_kind.array_index()];
+                }
                 if count > 1 {
                     let token =
-                        self.token[0][0][0][idx + piece_kind.array_index()][count as usize - 1];
-                    out_conv[0] += self.embedding[token][0]
-                        * self.conv[0][0][3321 - 81 + idx + piece_kind.array_index()];
-                    out_conv[1] += self.embedding[token][1]
-                        * self.conv[1][0][3321 - 81 + idx + piece_kind.array_index()];
+                        self.token[0][0][idx + piece_kind.array_index()][count as usize - 1];
+                    for (i, out) in out_conv.iter_mut().enumerate() {
+                        *out += self.embedding[token][i]
+                            * self.conv[i][0][3321 - 81 + idx + piece_kind.array_index()];
+                    }
                 }
             } else {
                 panic!("A piece not in the hand was used.");
@@ -368,30 +381,33 @@ impl Evaluate {
             for sq in Square::all() {
                 if let Some(pc) = pos.piece_at(sq) {
                     if sq.array_index() <= to.array_index() {
-                        let token = self.token[0][sq.array_index()][pc.as_u8() as usize]
+                        let token = self.token[sq.array_index()][pc.as_u8() as usize]
                             [to.array_index()][piece.as_u8() as usize];
                         let idx = self.conv_idx[sq.array_index()][to.array_index()];
-                        out_conv[0] += self.embedding[token][0] * self.conv[0][0][idx];
-                        out_conv[1] += self.embedding[token][1] * self.conv[1][0][idx];
+                        for (i, out) in out_conv.iter_mut().enumerate() {
+                            *out += self.embedding[token][i] * self.conv[i][0][idx];
+                        }
                     } else {
-                        let token = self.token[0][to.array_index()][piece.as_u8() as usize]
+                        let token = self.token[to.array_index()][piece.as_u8() as usize]
                             [sq.array_index()][pc.as_u8() as usize];
                         let idx = self.conv_idx[to.array_index()][sq.array_index()];
-                        out_conv[0] += self.embedding[token][0] * self.conv[0][0][idx];
-                        out_conv[1] += self.embedding[token][1] * self.conv[1][0][idx];
+                        for (i, out) in out_conv.iter_mut().enumerate() {
+                            *out += self.embedding[token][i] * self.conv[i][0][idx];
+                        }
                     }
                 }
             }
             // 移動先の1駒関係が足せていないのでここで足す
-            let token = self.token[0][to.array_index()][piece.as_u8() as usize][to.array_index()]
+            let token = self.token[to.array_index()][piece.as_u8() as usize][to.array_index()]
                 [piece.as_u8() as usize];
             let idx = self.conv_idx[to.array_index()][to.array_index()];
-            out_conv[0] += self.embedding[token][0] * self.conv[0][0][idx];
-            out_conv[1] += self.embedding[token][1] * self.conv[1][0][idx];
+            for (i, out) in out_conv.iter_mut().enumerate() {
+                *out += self.embedding[token][i] * self.conv[i][0][idx];
+            }
 
             // 活性化関数_1
-            let mut out_activation_1 = [0f32; 2];
-            for i in 0..2 {
+            let mut out_activation_1 = [0f32; 4];
+            for i in 0..hidden_size {
                 if out_conv[i] <= -3.0 {
                     out_activation_1[i] = 0.0;
                 } else if out_conv[i] >= 3.0 {
@@ -425,10 +441,11 @@ mod tests {
         let path = "test/load_inference.json";
 
         let eval = EvalJson {
-            embedding: vec![vec![0.; 2]; 17346050],
-            conv: vec![vec![vec![0.; 3335]; 1]; 2],
-            dense: vec![vec![0.; 2]; 1],
+            embedding: vec![vec![0.; 4]; 8673025],
+            conv: vec![vec![vec![0.; 3335]; 1]; 4],
+            dense: vec![vec![0.; 4]; 1],
         };
+
         let mut file = std::fs::File::create(path).unwrap();
         let value = serde_json::to_string(&eval).unwrap();
         file.write_all(value.as_bytes()).unwrap();

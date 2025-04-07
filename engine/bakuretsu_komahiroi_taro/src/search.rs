@@ -38,13 +38,13 @@ pub struct NegaAlpha {
 }
 
 impl NegaAlpha {
-    fn evaluate_diff(&mut self, pos: &mut Position, position_value: &[(f32, [f32; 2])]) -> i32 {
+    fn evaluate_diff(&mut self, pos: &mut Position, position_value: &[(f32, [f32; 4])]) -> i32 {
         //! 局面の差分評価
         //!
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 評価する局面
-        //!   - position_value: &[f32]
+        //!   - position_value: &[f32, [f32; 4]]
         //!     - 局面の評価
         //! - Returns
         //!   - value: i32
@@ -76,7 +76,7 @@ impl NegaAlpha {
     fn quiescence_search(
         &mut self,
         pos: &mut Position,
-        position_value: &mut Vec<(f32, [f32; 2])>,
+        position_value: &mut Vec<(f32, [f32; 4])>,
         depth: u32,
         mut alpha: i32,
         beta: i32,
@@ -86,7 +86,7 @@ impl NegaAlpha {
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 静止探索する局面
-        //!   - position_value: Vec<(f32, [f32; 2])>
+        //!   - position_value: Vec<(f32, [f32; 4])>
         //!     - 局面における評価関数の2層目の出力
         //!   - depth: u32
         //!     - 残り探索深さ
@@ -192,7 +192,7 @@ impl NegaAlpha {
     pub fn search(
         &mut self,
         pos: &mut Position,
-        position_value: &mut Vec<(f32, [f32; 2])>,
+        position_value: &mut Vec<(f32, [f32; 4])>,
         in_null_move: bool,
         depth: u32,
         mut alpha: i32,
@@ -203,7 +203,7 @@ impl NegaAlpha {
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 探索する局面
-        //!   - position_value: &mut Vec<(f32, [f32; 2])>
+        //!   - position_value: &mut Vec<(f32, [f32; 4])>
         //!     - 局面における評価関数の2層目の出力
         //!   - in_null_move: bool
         //!     - null moveした直後かどうか

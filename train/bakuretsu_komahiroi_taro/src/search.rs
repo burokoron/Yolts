@@ -40,7 +40,7 @@ pub struct NegaAlpha {
 }
 
 impl NegaAlpha {
-    fn evaluate_diff(&mut self, pos: &mut Position, position_value: &[f32]) -> i32 {
+    fn evaluate_diff(&mut self, pos: &mut Position, position_value: &[(f32, [f32; 2])]) -> i32 {
         //! 局面の差分評価
         //!
         //! - Arguments
@@ -148,7 +148,7 @@ impl NegaAlpha {
         } else {
             // 通常の評価
             let value = if let Some(value) = position_value.last() {
-                (*value * VALUE_SCALE) as i32
+                (value.0 * VALUE_SCALE) as i32
             } else {
                 panic!("Empty position_value.")
             };
@@ -166,7 +166,7 @@ impl NegaAlpha {
     fn quiescence_search(
         &mut self,
         pos: &mut Position,
-        position_value: &mut Vec<f32>,
+        position_value: &mut Vec<(f32, [f32; 2])>,
         depth: u32,
         mut alpha: i32,
         beta: i32,
@@ -176,8 +176,8 @@ impl NegaAlpha {
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 静止探索する局面
-        //!   - position_value: &mut Vec<f32>
-        //!     - 局面の評価値
+        //!   - position_value: Vec<(f32, [f32; 2])>
+        //!     - 局面における評価関数の2層目の出力
         //!   - depth: u32
         //!     - 残り探索深さ
         //!   - mut alpha: i32
@@ -255,7 +255,7 @@ impl NegaAlpha {
                     }
                 }
             }
-            if is_check || value > 0 {
+            if is_check || pos.is_check_move(m) || value > 0 {
                 move_list.push((m, value));
             }
         }
@@ -286,7 +286,7 @@ impl NegaAlpha {
     pub fn search(
         &mut self,
         pos: &mut Position,
-        position_value: &mut Vec<f32>,
+        position_value: &mut Vec<(f32, [f32; 2])>,
         in_null_move: bool,
         depth: u32,
         mut alpha: i32,
@@ -297,8 +297,8 @@ impl NegaAlpha {
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 探索する局面
-        //!   - position_value: &mut Vec<f32>
-        //!     - 局面の評価値
+        //!   - position_value: &mut Vec<(f32, [f32; 2])>
+        //!     - 局面における評価関数の2層目の出力
         //!   - in_null_move: bool
         //!     - null moveした直後かどうか
         //!   - depth: u32
@@ -492,7 +492,7 @@ impl NegaAlpha {
             ));
             pos.do_move(m.0);
             // Late Move Reductions
-            if is_lmr && move_count >= 6 && !pos.in_check() {
+            if is_lmr && move_count >= 11 && !pos.in_check() {
                 let value = -self.search(pos, position_value, false, depth - 2, -beta, -best_value);
                 if value <= best_value {
                     pos.undo_move(m.0);
@@ -505,7 +505,7 @@ impl NegaAlpha {
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
-                if is_lmr && move_count < 6 {
+                if is_lmr && move_count < 11 {
                     is_lmr = false;
                 }
                 if depth == self.max_depth {

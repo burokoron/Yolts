@@ -279,7 +279,7 @@ impl BakuretsuKomahiroiTaro {
 
             // 現在の局面が通常の評価関数で評価値が一定以下(互角)ならそのまま、そうでないなら入玉用評価関数に変更
             let mut position_value = vec![searcher.eval.inference_diff(pos, None, None); 1];
-            let value = searcher.search(
+            let current_value = searcher.search(
                 pos,
                 &mut position_value,
                 false,
@@ -287,7 +287,7 @@ impl BakuretsuKomahiroiTaro {
                 -MATING_VALUE,
                 MATING_VALUE,
             );
-            searcher.is_eval_nyugyoku = value > 8500;
+            searcher.is_eval_nyugyoku = current_value > 7213;
 
             // 入玉宣言の確認
             if search::is_nyugyoku_win(pos) {
@@ -306,7 +306,7 @@ impl BakuretsuKomahiroiTaro {
                     MATING_VALUE,
                 );
                 if searcher.is_eval_nyugyoku && value.abs() <= MATING_VALUE - 1000 {
-                    value = (value as f32 * (11110.0 / 5676.0)) as i32;
+                    value = (value as f32 * (7213.0 / 5676.0)).max(current_value as f32) as i32;
                 }
                 let end = searcher.start_time.elapsed();
                 let elapsed_time =
@@ -554,7 +554,9 @@ mod tests {
         let path = "test/go.json";
 
         let eval = evaluate::EvalJson {
-            params: vec![0.; 38644290],
+            embedding: vec![vec![0.; 2]; 17346050],
+            conv: vec![vec![vec![0.; 3335]; 1]; 2],
+            dense: vec![vec![0.; 2]; 1],
         };
         let mut file = std::fs::File::create(path).unwrap();
         let value = serde_json::to_string(&eval).unwrap();
