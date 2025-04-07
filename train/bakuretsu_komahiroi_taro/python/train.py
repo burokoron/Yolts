@@ -8,8 +8,8 @@ import cshogi
 import numpy as np
 import torch
 import torch.nn as nn
-from schedulefree import RAdamScheduleFree
 from numba import njit
+from schedulefree import RAdamScheduleFree
 from torch.utils.data import DataLoader, Dataset
 from torchinfo import summary
 from tqdm import tqdm
@@ -118,9 +118,7 @@ class MakeFeatures:
                 if pieces_rev[i] == 0 or pieces_rev[j] == 0:
                     features[idx] = 0
                 else:
-                    features[idx] = features_table[i][pieces_rev[i]][j][
-                        pieces_rev[j]
-                    ]
+                    features[idx] = features_table[i][pieces_rev[i]][j][pieces_rev[j]]
                 idx += 1
         for i in range(len(wp)):
             if wp[i] == 0:
