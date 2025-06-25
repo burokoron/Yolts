@@ -41,17 +41,16 @@ pub struct NegaAlpha {
     pub hash_table_generation: u32,
     pub move_ordering: MoveOrdering,
     pub position_history: HashSet<u64>,
+    pub position_value: Vec<(f32, [f32; 4])>,
 }
 
 impl NegaAlpha {
-    fn evaluate_diff(&mut self, pos: &mut Position, position_value: &[(f32, [f32; 4])]) -> i32 {
+    fn evaluate_diff(&mut self, pos: &mut Position) -> i32 {
         //! 局面の差分評価
         //!
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 評価する局面
-        //!   - position_value: &[f32, [f32; 4]]
-        //!     - 局面の評価
         //! - Returns
         //!   - value: i32
         //!     - 評価値
@@ -65,7 +64,7 @@ impl NegaAlpha {
         self.num_searched += 1;
 
         // 通常の評価
-        let value = if let Some(value) = position_value.last() {
+        let value = if let Some(value) = self.position_value.last() {
             (value.0 * VALUE_SCALE) as i32
         } else {
             panic!("Empty position_value.")
@@ -83,7 +82,6 @@ impl NegaAlpha {
         &mut self,
         pos: &mut Position,
         previous_move_to: Square,
-        position_value: &mut Vec<(f32, [f32; 4])>,
         mut alpha: i32,
         beta: i32,
     ) -> i32 {
@@ -94,8 +92,6 @@ impl NegaAlpha {
         //!    - 探索する局面
         //! - previous_move_to: Square
         //!  - 直前の指し手の着手先
-        //!  - position_value: &mut Vec<(f32, [f32; 4])>
-        //!    - 局面における評価関数の2層目
         //! - mut alpha: i32
         //!   - アルファ値
         //! - beta: i32
@@ -116,7 +112,7 @@ impl NegaAlpha {
             return alpha;
         }
 
-        let value = self.evaluate_diff(pos, position_value);
+        let value = self.evaluate_diff(pos);
 
         if alpha < value {
             alpha = value;
@@ -176,22 +172,22 @@ impl NegaAlpha {
         }
         move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
         if !is_check {
-            if let Some(first) = move_list.get(0).cloned() {
+            if let Some(first) = move_list.first().cloned() {
                 move_list.clear();
                 move_list.push(first);
             }
         }
 
         for m in move_list {
-            position_value.push(self.eval.inference_diff(
+            self.position_value.push(self.eval.inference_diff(
                 pos,
                 Some(m.0),
-                position_value.last().copied(),
+                self.position_value.last().copied(),
             ));
             pos.do_move(m.0);
-            let value = -self.recapture_search(pos, m.0.to(), position_value, -beta, -alpha);
+            let value = -self.recapture_search(pos, m.0.to(), -beta, -alpha);
             pos.undo_move(m.0);
-            position_value.pop();
+            self.position_value.pop();
 
             if alpha < value {
                 alpha = value;
@@ -206,7 +202,6 @@ impl NegaAlpha {
     fn quiescence_search(
         &mut self,
         pos: &mut Position,
-        position_value: &mut Vec<(f32, [f32; 4])>,
         depth: u32,
         mut alpha: i32,
         beta: i32,
@@ -216,8 +211,6 @@ impl NegaAlpha {
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 静止探索する局面
-        //!   - position_value: Vec<(f32, [f32; 4])>
-        //!     - 局面における評価関数の2層目の出力
         //!   - depth: u32
         //!     - 残り探索深さ
         //!   - mut alpha: i32
@@ -240,7 +233,7 @@ impl NegaAlpha {
             return alpha;
         }
 
-        let value = self.evaluate_diff(pos, position_value);
+        let value = self.evaluate_diff(pos);
 
         if alpha < value {
             alpha = value;
@@ -294,19 +287,19 @@ impl NegaAlpha {
         move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
 
         for m in move_list {
-            position_value.push(self.eval.inference_diff(
+            self.position_value.push(self.eval.inference_diff(
                 pos,
                 Some(m.0),
-                position_value.last().copied(),
+                self.position_value.last().copied(),
             ));
             pos.do_move(m.0);
             let value = if depth - 1 != 0 {
-                -self.quiescence_search(pos, position_value, depth - 1, -beta, -alpha)
+                -self.quiescence_search(pos, depth - 1, -beta, -alpha)
             } else {
-                -self.recapture_search(pos, m.0.to(), position_value, -beta, -alpha)
+                -self.recapture_search(pos, m.0.to(), -beta, -alpha)
             };
             pos.undo_move(m.0);
-            position_value.pop();
+            self.position_value.pop();
 
             if alpha < value {
                 alpha = value;
@@ -322,7 +315,6 @@ impl NegaAlpha {
     pub fn search(
         &mut self,
         pos: &mut Position,
-        position_value: &mut Vec<(f32, [f32; 4])>,
         in_null_move: bool,
         depth: u32,
         mut alpha: i32,
@@ -334,8 +326,6 @@ impl NegaAlpha {
         //! - Arguments
         //!   - pos: &mut Position
         //!     - 探索する局面
-        //!   - position_value: &mut Vec<(f32, [f32; 4])>
-        //!     - 局面における評価関数の2層目の出力
         //!   - in_null_move: bool
         //!     - null moveした直後かどうか
         //!   - depth: u32
@@ -398,7 +388,7 @@ impl NegaAlpha {
 
         // 探索深さ制限なら
         if depth == 0 {
-            return self.quiescence_search(pos, position_value, 2, alpha, beta);
+            return self.quiescence_search(pos, 2, alpha, beta);
         }
 
         // Mate Distance Pruning
@@ -417,11 +407,11 @@ impl NegaAlpha {
             }
         }
 
-        let static_value = self.evaluate_diff(pos, position_value);
+        let static_value = self.evaluate_diff(pos);
 
         // Razoring
         if !in_check && static_value < alpha - 469 - 307 * depth as i32 * depth as i32 {
-            let value = self.quiescence_search(pos, position_value, 3, alpha - 1, alpha);
+            let value = self.quiescence_search(pos, 3, alpha - 1, alpha);
             if value < alpha && value.abs() < MATING_VALUE - 1000 {
                 return value;
             }
@@ -449,15 +439,7 @@ impl NegaAlpha {
             let reduce =
                 ((static_value - beta) / NULL_MOVE_DYNAMIC_GAMMA).min(7) as u32 + depth / 3 + 5;
             pos.do_null_move();
-            let value = -self.search(
-                pos,
-                position_value,
-                true,
-                depth - reduce.min(depth),
-                -beta,
-                -beta + 1,
-                None,
-            );
+            let value = -self.search(pos, true, depth - reduce.min(depth), -beta, -beta + 1, None);
             pos.undo_null_move();
             if value >= beta {
                 return beta;
@@ -561,10 +543,10 @@ impl NegaAlpha {
         let mut is_lmr = depth >= 2 && depth != self.max_depth;
         self.position_history.insert(pos.key());
         for (move_count, m) in move_list.iter().enumerate() {
-            position_value.push(self.eval.inference_diff(
+            self.position_value.push(self.eval.inference_diff(
                 pos,
                 Some(m.0),
-                position_value.last().copied(),
+                self.position_value.last().copied(),
             ));
             let piece = match m.0 {
                 Move::Normal {
@@ -579,7 +561,6 @@ impl NegaAlpha {
             if is_lmr && move_count >= 11 && !pos.in_check() {
                 let value = -self.search(
                     pos,
-                    position_value,
                     false,
                     depth - 2,
                     -beta,
@@ -588,14 +569,13 @@ impl NegaAlpha {
                 );
                 if value <= best_value {
                     pos.undo_move(m.0);
-                    position_value.pop();
+                    self.position_value.pop();
                     continue;
                 }
             }
             // 通常の探索
             let value = -self.search(
                 pos,
-                position_value,
                 false,
                 depth - 1,
                 -beta,
@@ -613,7 +593,7 @@ impl NegaAlpha {
                 }
             }
             pos.undo_move(m.0);
-            position_value.pop();
+            self.position_value.pop();
             if best_value >= beta {
                 // Killer Heuristic
                 if self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]

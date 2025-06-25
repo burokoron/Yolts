@@ -105,6 +105,7 @@ impl BakuretsuKomahiroiTaro {
                     counter_move: vec![vec![vec![None; 2]; 81]; 14],
                 },
                 position_history: HashSet::new(),
+                position_value: Vec::new(),
             })
         }
         // 定跡の読み込み
@@ -285,20 +286,12 @@ impl BakuretsuKomahiroiTaro {
                 counter_move: vec![vec![vec![None; 2]; 81]; 14],
             };
             searcher.position_history.clone_from(position_history);
+            searcher.position_value = vec![searcher.eval.inference_diff(pos, None, None); 1];
 
             // 探索
-            let mut position_value = vec![searcher.eval.inference_diff(pos, None, None); 1];
             for depth in 1..=self.depth_limit {
                 searcher.max_depth = depth;
-                let value = searcher.search(
-                    pos,
-                    &mut position_value,
-                    false,
-                    depth,
-                    -MATING_VALUE,
-                    MATING_VALUE,
-                    None,
-                );
+                let value = searcher.search(pos, false, depth, -MATING_VALUE, MATING_VALUE, None);
                 let end = searcher.start_time.elapsed();
                 let elapsed_time =
                     end.as_secs() as i32 * 1000 + end.subsec_nanos() as i32 / 1_000_000;
