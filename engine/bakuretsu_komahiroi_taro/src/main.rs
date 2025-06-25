@@ -71,9 +71,11 @@ impl BakuretsuKomahiroiTaro {
         println!("usiok");
     }
 
-    fn isready(&mut self) {
+    fn isready(&mut self, tsbook: &mut book::ThompsonSamplingBook) {
         //! 対局の準備をする
-        //! - 探索準備
+        //!
+        //! - Arguments
+        //!  - tsbook: &mut ThompsonSamplingBook
 
         // 探索準備
         if self.searcher.is_none() {
@@ -94,15 +96,20 @@ impl BakuretsuKomahiroiTaro {
                         best_move: None,
                         generation: 0,
                     };
-                    5000000
+                    200000
                 ],
                 hash_table_generation: 0,
                 move_ordering: search::MoveOrdering {
                     piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                     killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
+                    counter_move: vec![vec![vec![None; 2]; 81]; 14],
                 },
                 position_history: HashSet::new(),
             })
+        }
+        // 定跡の読み込み
+        if self.use_book {
+            tsbook.load(self.book_file_path.clone());
         }
 
         println!("readyok");
@@ -275,6 +282,7 @@ impl BakuretsuKomahiroiTaro {
             searcher.move_ordering = search::MoveOrdering {
                 piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                 killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
+                counter_move: vec![vec![vec![None; 2]; 81]; 14],
             };
             searcher.position_history.clone_from(position_history);
 
@@ -289,6 +297,7 @@ impl BakuretsuKomahiroiTaro {
                     depth,
                     -MATING_VALUE,
                     MATING_VALUE,
+                    None,
                 );
                 let end = searcher.start_time.elapsed();
                 let elapsed_time =
@@ -364,7 +373,6 @@ fn main() {
     let mut pos = Position::default();
     let mut position_history = HashSet::new();
     let tsbook = &mut book::ThompsonSamplingBook::new();
-    tsbook.load(engine.book_file_path.clone());
 
     loop {
         // 入力の受け取り
@@ -385,7 +393,7 @@ fn main() {
             }
             "isready" => {
                 // 対局準備
-                engine.isready();
+                engine.isready(tsbook);
             }
             "setoption" => {
                 // エンジンのパラメータ設定
@@ -508,10 +516,11 @@ mod tests {
         let engine = &mut BakuretsuKomahiroiTaro::new();
         engine.setoption("EvalFile".to_string(), path.to_string());
         engine.setoption("DepthLimit".to_string(), "4".to_string());
-        engine.isready();
+        engine.setoption("UseBook".to_string(), "false".to_string());
+        let tsbook = &mut book::ThompsonSamplingBook::new();
+        engine.isready(tsbook);
         let mut pos;
         let ppos;
-        let tsbook = &mut book::ThompsonSamplingBook::new();
         let mut position_history;
         (ppos, pos, position_history) = engine.position(
             "sfen lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
