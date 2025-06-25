@@ -41,9 +41,12 @@
 | [爆裂駒拾太郎 V 2.2.3](https://github.com/burokoron/Yolts/releases/tag/v3.6.3) | 1598 |
 | [爆裂駒拾太郎 V 2.2.4](https://github.com/burokoron/Yolts/releases/tag/v3.6.4) | 1642 |
 | [爆裂駒拾太郎 V 3.0.2](https://github.com/burokoron/Yolts/releases/tag/v4.0.2) | 1714 |
+| [爆裂駒拾太郎 V 3.0.3](https://github.com/burokoron/Yolts/releases/tag/v4.0.3) | 1765 |
 
 ## 更新履歴
 
+- 2025/06/25
+  - 爆裂駒拾太郎 V 3.0.3のレーティングを計測(R1765)
 - 2025/04/07
   - 爆裂駒拾太郎 V 3.0.3にアップデート
     - PPe4-4型評価関数(第0世代)に変更
