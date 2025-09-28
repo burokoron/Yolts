@@ -314,7 +314,7 @@ impl BakuretsuKomahiroiTaro {
                         elapsed_time,
                         searcher.num_searched
                     );
-                    println!("score cp {} pv {}nps {}", value, pv, nps);
+                    println!("score cp {} nps {} pv {}", value, nps, pv);
                 } else {
                     break;
                 }
