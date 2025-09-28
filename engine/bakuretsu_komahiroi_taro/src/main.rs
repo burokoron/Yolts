@@ -1,9 +1,6 @@
-use encoding::all::WINDOWS_31J;
-use encoding::{EncoderTrap, Encoding};
 use shogi_core::{Color, Move, PartialPosition, Piece, Square};
 use shogi_usi_parser::FromUsi;
 use std::collections::HashSet;
-use std::io::{stdout, Write};
 use yasai::Position;
 
 mod book;
@@ -46,14 +43,11 @@ impl BakuretsuKomahiroiTaro {
     fn usi(&self) {
         //! エンジン名(バージョン番号付き)とオプションを返答
 
-        print!("id name ");
-        let mut out = stdout();
-        let bytes = WINDOWS_31J
-            .encode(&self.engine_name, EncoderTrap::Ignore)
-            .expect("Cannot encode the engine name.");
-        out.write_all(&bytes[..])
-            .expect("Cannot write the engine name.");
-        println!(" version {}", env!("CARGO_PKG_VERSION"));
+        println!(
+            "id name {} version {}",
+            self.engine_name,
+            env!("CARGO_PKG_VERSION")
+        );
         println!("id author {}", self.author);
         println!(
             "option name EvalFile type string default {}",
