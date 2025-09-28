@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/burokoron/Yolts)
+
 # Yolts
 
 詰将棋に意味はあるのか、はたまた無いのか、永遠に終わらない不毛な議論に終止符を打つ崇高なプロジェクト。  
