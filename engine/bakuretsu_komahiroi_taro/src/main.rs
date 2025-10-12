@@ -22,6 +22,23 @@ struct BakuretsuKomahiroiTaro {
 }
 
 impl BakuretsuKomahiroiTaro {
+    /// 既定設定を用いて BakuretsuKomahiroiTaro の新しいインスタンスを生成する。
+    ///
+    /// デフォルト設定にはエンジン名 "爆裂駒拾太郎"、作者 "burokoron"、評価ファイル "eval.json"、
+    /// 探索深さ上限 9、ブックファイル "book.json"、ブック絞り込み値 10、ブック使用有効、
+    /// 検索モード "Standard" が含まれる。探索器は初期状態では生成されていない。
+    ///
+    /// # Returns
+    ///
+    /// 新しく構築された `BakuretsuKomahiroiTaro` のインスタンス。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = BakuretsuKomahiroiTaro::new();
+    /// assert_eq!(engine.engine_name, "爆裂駒拾太郎");
+    /// assert_eq!(engine.search_mode, "Standard");
+    /// ```
     fn new() -> Self {
         //! エンジンのインスタンスを作成
         //!
@@ -42,6 +59,16 @@ impl BakuretsuKomahiroiTaro {
         }
     }
 
+    /// USIプロトコルへエンジン識別情報と設定可能オプションを出力する。
+    ///
+    /// 出力はエンジン名（バージョン含む）、作者、各種`option`行と最後の`usiok`から構成される。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut engine = BakuretsuKomahiroiTaro::new();
+    /// engine.usi();
+    /// ```
     fn usi(&self) {
         //! エンジン名(バージョン番号付き)とオプションを返答
 
@@ -71,6 +98,24 @@ impl BakuretsuKomahiroiTaro {
         println!("usiok");
     }
 
+    /// 対局に向けた初期化を行う。
+    ///
+    /// 必要に応じてエンジンの探索器を初期化し、定跡データの読み込みを行って準備完了を示す出力を行う。
+    ///
+    /// # Parameters
+    ///
+    /// - `tsbook`: 定跡データを管理する `ThompsonSamplingBook` の可変参照。エンジンの設定で定跡を使用する場合にファイルから読み込まれる。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::book;
+    ///
+    /// let mut engine = BakuretsuKomahiroiTaro::new();
+    /// let mut tsbook = book::ThompsonSamplingBook::new();
+    /// engine.isready(&mut tsbook);
+    /// assert!(engine.searcher.is_some());
+    /// ```
     fn isready(&mut self, tsbook: &mut book::ThompsonSamplingBook) {
         //! 対局の準備をする
         //!
@@ -118,6 +163,31 @@ impl BakuretsuKomahiroiTaro {
         println!("readyok");
     }
 
+    /// エンジンの設定項目を変更する。
+    ///
+    /// `name` に指定した設定項目に対して `value` を適用する。サポートされる項目は以下の通り:
+    /// - `EvalFile` — 評価関数ファイルパス（この変更は内部の searcher を再初期化します）
+    /// - `DepthLimit` — 探索深さ上限（`u32` に変換されます）
+    /// - `NarrowBook` — 局面絞り込み閾値（`u32` に変換されます）
+    /// - `UseBook` — 局面本使用フラグ（`bool` に変換されます）
+    /// - `SearchMode` — 探索モード文字列（この変更は内部の searcher を再初期化します）
+    ///
+    /// # パラメータ
+    ///
+    /// - `name`: 設定項目名
+    /// - `value`: 設定に用いる文字列値
+    ///
+    /// # パニック
+    ///
+    /// `DepthLimit`、`NarrowBook`、`UseBook` に対して `value` を適切な型に変換できない場合、パースに失敗してパニックします。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut engine = BakuretsuKomahiroiTaro::new();
+    /// engine.setoption("DepthLimit".to_string(), "8".to_string());
+    /// engine.setoption("EvalFile".to_string(), "custom_eval.json".to_string());
+    /// ```
     fn setoption(&mut self, name: String, value: String) {
         //! エンジンのパラメータを設定する
         //!
@@ -239,6 +309,23 @@ impl BakuretsuKomahiroiTaro {
         (ppos, pos, position_history)
     }
 
+    /// 現在の局面から定跡と内部探索を用いて最善手を決定し、USI 形式の文字列で返す。
+    ///
+    /// 定跡が有効かつ該当する一手が見つかれば即座にそれを返し、そうでなければ逐次深さ探索で許可時間内に得られた最善手を返す。探索中は深さ・時間・ノード数・評価値・PV を info 行として出力する。入玉による自動勝利を検出した場合は "win" を返す。
+    ///
+    /// # Arguments
+    /// - `tsbook` : 探索前に参照する定跡データ（存在すれば最優先で適用される）。
+    /// - `max_time` : 探索に許可される最大時間（ミリ秒）。
+    ///
+    /// # Returns
+    /// 見つかった最善手の文字列。定跡での手や探索で決定した手は USI/SFEN 形式の手文字列で返される。指が決定できない場合は `"resign"`、入玉勝利検出時は `"win"` を返す。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let best = engine.go(&ppos, &mut tsbook, &mut pos, &mut history, 1000);
+    /// assert!(!best.is_empty());
+    /// ```
     fn go(
         &mut self,
         ppos: &PartialPosition,
