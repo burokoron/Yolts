@@ -17,6 +17,7 @@ struct BakuretsuKomahiroiTaro {
     book_file_path: String,
     narrow_book: u32,
     use_book: bool,
+    search_mode: String,
     searcher: Option<search::NegaAlpha>,
 }
 
@@ -36,6 +37,7 @@ impl BakuretsuKomahiroiTaro {
             book_file_path: "book.json".to_string(),
             narrow_book: 10,
             use_book: true,
+            search_mode: "Standard".to_string(),
             searcher: None,
         }
     }
@@ -44,7 +46,7 @@ impl BakuretsuKomahiroiTaro {
         //! エンジン名(バージョン番号付き)とオプションを返答
 
         println!(
-            "id name {} version {}",
+            "id name {} v{}",
             self.engine_name,
             env!("CARGO_PKG_VERSION")
         );
@@ -62,6 +64,10 @@ impl BakuretsuKomahiroiTaro {
             self.narrow_book
         );
         println!("option name UseBook type check default {}", self.use_book);
+        println!(
+            "option name SearchMode type combo default {} var Standard var Priority-27-Point var Absolute-27-Point",
+            self.search_mode
+        );
         println!("usiok");
     }
 
@@ -74,6 +80,7 @@ impl BakuretsuKomahiroiTaro {
         // 探索準備
         if self.searcher.is_none() {
             self.searcher = Some(search::NegaAlpha {
+                my_turn: Color::Black, // 開始局面の手番は先手(Black)。後で局面に応じて上書きされる
                 start_time: std::time::Instant::now(),
                 max_time: 0,
                 num_searched: 0,
@@ -81,6 +88,7 @@ impl BakuretsuKomahiroiTaro {
                 max_board_number: 0,
                 best_move_pv: None,
                 eval: Evaluate::new(&self.eval_file),
+                search_mode: self.search_mode.clone(),
                 hash_table: vec![
                     search::HashTableValue {
                         key: 0,
@@ -138,6 +146,10 @@ impl BakuretsuKomahiroiTaro {
                 self.use_book = value
                     .parse()
                     .expect("Cannot convert the set UseBook value.")
+            }
+            "SearchMode" => {
+                self.search_mode = value.clone();
+                self.searcher = None;
             }
             _ => (),
         }
@@ -267,6 +279,7 @@ impl BakuretsuKomahiroiTaro {
         // 探索部の初期化
         let mut best_move = "resign".to_string();
         if let Some(ref mut searcher) = self.searcher {
+            searcher.my_turn = pos.side_to_move();
             searcher.start_time = std::time::Instant::now();
             searcher.max_time = max_time;
             searcher.num_searched = 0;
