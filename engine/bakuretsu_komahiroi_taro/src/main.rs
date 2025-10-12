@@ -37,7 +37,7 @@ impl BakuretsuKomahiroiTaro {
             book_file_path: "book.json".to_string(),
             narrow_book: 10,
             use_book: true,
-            search_mode: "Standard".to_string(),
+            search_mode: search::SEARCH_MODE_STANDARD.to_string(),
             searcher: None,
         }
     }
@@ -88,7 +88,7 @@ impl BakuretsuKomahiroiTaro {
                 max_board_number: 0,
                 best_move_pv: None,
                 eval: Evaluate::new(&self.eval_file),
-                search_mode: self.search_mode.clone(),
+                search_mode: search::SearchMode::from_str(&self.search_mode),
                 hash_table: vec![
                     search::HashTableValue {
                         key: 0,

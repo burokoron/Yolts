@@ -16,6 +16,28 @@ const NULL_MOVE_DYNAMIC_GAMMA: i32 = 235;
 const KING_POSITION_SCALE: i32 = 99;
 const NON_KING_POSITION_SCALE: i32 = 1;
 
+pub const SEARCH_MODE_STANDARD: &str = "Standard";
+pub const SEARCH_MODE_PRIORITY_27: &str = "Priority-27-Point";
+pub const SEARCH_MODE_ABSOLUTE_27: &str = "Absolute-27-Point";
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SearchMode {
+    Standard,
+    Priority27Point,
+    Absolute27Point,
+}
+
+impl SearchMode {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            SEARCH_MODE_STANDARD => SearchMode::Standard,
+            SEARCH_MODE_PRIORITY_27 => SearchMode::Priority27Point,
+            SEARCH_MODE_ABSOLUTE_27 => SearchMode::Absolute27Point,
+            _ => unreachable!("Unrecognizable search mode."),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct HashTableValue {
     pub key: u64,
@@ -41,7 +63,7 @@ pub struct NegaAlpha {
     pub max_board_number: u16,
     pub best_move_pv: Option<Move>,
     pub eval: Evaluate,
-    pub search_mode: String,
+    pub search_mode: SearchMode,
     pub hash_table: Vec<HashTableValue>,
     pub hash_table_generation: u32,
     pub move_ordering: MoveOrdering,
@@ -76,7 +98,10 @@ impl NegaAlpha {
         };
 
         // 入玉宣言用の補正評価
-        if self.search_mode == "Priority-27-Point" || self.search_mode == "Absolute-27-Point" {
+        if matches!(
+            self.search_mode,
+            SearchMode::Priority27Point | SearchMode::Absolute27Point
+        ) {
             for sq in Square::all() {
                 let pc = pos.piece_at(sq);
                 if let Some(pc) = pc {
@@ -178,7 +203,7 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            if self.search_mode == "Absolute-27-Point" {
+            if matches!(self.search_mode, SearchMode::Absolute27Point) {
                 if pos.side_to_move() == self.my_turn {
                     return -MATING_VALUE + pos.ply() as i32;
                 } else {
@@ -307,7 +332,7 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            if self.search_mode == "Absolute-27-Point" {
+            if matches!(self.search_mode, SearchMode::Absolute27Point) {
                 if pos.side_to_move() == self.my_turn {
                     return -MATING_VALUE + pos.ply() as i32;
                 } else {
@@ -519,7 +544,7 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            if self.search_mode == "Absolute-27-Point" {
+            if matches!(self.search_mode, SearchMode::Absolute27Point) {
                 if pos.side_to_move() == self.my_turn {
                     return -MATING_VALUE + pos.ply() as i32;
                 } else {
