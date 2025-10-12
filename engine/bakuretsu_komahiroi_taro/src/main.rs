@@ -1,9 +1,6 @@
-use encoding::all::WINDOWS_31J;
-use encoding::{EncoderTrap, Encoding};
 use shogi_core::{Color, Move, PartialPosition, Piece, Square};
 use shogi_usi_parser::FromUsi;
 use std::collections::HashSet;
-use std::io::{stdout, Write};
 use yasai::Position;
 
 mod book;
@@ -20,6 +17,7 @@ struct BakuretsuKomahiroiTaro {
     book_file_path: String,
     narrow_book: u32,
     use_book: bool,
+    search_mode: String,
     searcher: Option<search::NegaAlpha>,
 }
 
@@ -39,6 +37,7 @@ impl BakuretsuKomahiroiTaro {
             book_file_path: "book.json".to_string(),
             narrow_book: 10,
             use_book: true,
+            search_mode: search::SEARCH_MODE_STANDARD.to_string(),
             searcher: None,
         }
     }
@@ -46,14 +45,11 @@ impl BakuretsuKomahiroiTaro {
     fn usi(&self) {
         //! エンジン名(バージョン番号付き)とオプションを返答
 
-        print!("id name ");
-        let mut out = stdout();
-        let bytes = WINDOWS_31J
-            .encode(&self.engine_name, EncoderTrap::Ignore)
-            .expect("Cannot encode the engine name.");
-        out.write_all(&bytes[..])
-            .expect("Cannot write the engine name.");
-        println!(" version {}", env!("CARGO_PKG_VERSION"));
+        println!(
+            "id name {} v{}",
+            self.engine_name,
+            env!("CARGO_PKG_VERSION")
+        );
         println!("id author {}", self.author);
         println!(
             "option name EvalFile type string default {}",
@@ -68,6 +64,10 @@ impl BakuretsuKomahiroiTaro {
             self.narrow_book
         );
         println!("option name UseBook type check default {}", self.use_book);
+        println!(
+            "option name SearchMode type combo default {} var Standard var Priority-27-Point var Absolute-27-Point",
+            self.search_mode
+        );
         println!("usiok");
     }
 
@@ -80,6 +80,7 @@ impl BakuretsuKomahiroiTaro {
         // 探索準備
         if self.searcher.is_none() {
             self.searcher = Some(search::NegaAlpha {
+                my_turn: Color::Black, // 開始局面の手番は先手(Black)。後で局面に応じて上書きされる
                 start_time: std::time::Instant::now(),
                 max_time: 0,
                 num_searched: 0,
@@ -87,6 +88,7 @@ impl BakuretsuKomahiroiTaro {
                 max_board_number: 0,
                 best_move_pv: None,
                 eval: Evaluate::new(&self.eval_file),
+                search_mode: search::SearchMode::from_str(&self.search_mode),
                 hash_table: vec![
                     search::HashTableValue {
                         key: 0,
@@ -144,6 +146,10 @@ impl BakuretsuKomahiroiTaro {
                 self.use_book = value
                     .parse()
                     .expect("Cannot convert the set UseBook value.")
+            }
+            "SearchMode" => {
+                self.search_mode = value;
+                self.searcher = None;
             }
             _ => (),
         }
@@ -273,6 +279,7 @@ impl BakuretsuKomahiroiTaro {
         // 探索部の初期化
         let mut best_move = "resign".to_string();
         if let Some(ref mut searcher) = self.searcher {
+            searcher.my_turn = pos.side_to_move();
             searcher.start_time = std::time::Instant::now();
             searcher.max_time = max_time;
             searcher.num_searched = 0;
@@ -320,7 +327,7 @@ impl BakuretsuKomahiroiTaro {
                         elapsed_time,
                         searcher.num_searched
                     );
-                    println!("score cp {} pv {}nps {}", value, pv, nps);
+                    println!("score cp {} nps {} pv {}", value, nps, pv);
                 } else {
                     break;
                 }

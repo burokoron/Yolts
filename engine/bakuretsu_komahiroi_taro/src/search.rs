@@ -13,6 +13,31 @@ const NULL_MOVE_MARGIN1: i32 = 21;
 const NULL_MOVE_MARGIN2: i32 = 421;
 const NULL_MOVE_DYNAMIC_GAMMA: i32 = 235;
 
+const KING_POSITION_SCALE: i32 = 99;
+const NON_KING_POSITION_SCALE: i32 = 1;
+
+pub const SEARCH_MODE_STANDARD: &str = "Standard";
+pub const SEARCH_MODE_PRIORITY_27: &str = "Priority-27-Point";
+pub const SEARCH_MODE_ABSOLUTE_27: &str = "Absolute-27-Point";
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SearchMode {
+    Standard,
+    Priority27Point,
+    Absolute27Point,
+}
+
+impl SearchMode {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            SEARCH_MODE_STANDARD => SearchMode::Standard,
+            SEARCH_MODE_PRIORITY_27 => SearchMode::Priority27Point,
+            SEARCH_MODE_ABSOLUTE_27 => SearchMode::Absolute27Point,
+            _ => unreachable!("Unrecognizable search mode."),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct HashTableValue {
     pub key: u64,
@@ -30,6 +55,7 @@ pub struct MoveOrdering {
 }
 
 pub struct NegaAlpha {
+    pub my_turn: Color,
     pub start_time: std::time::Instant,
     pub max_time: i32,
     pub num_searched: u64,
@@ -37,6 +63,7 @@ pub struct NegaAlpha {
     pub max_board_number: u16,
     pub best_move_pv: Option<Move>,
     pub eval: Evaluate,
+    pub search_mode: SearchMode,
     pub hash_table: Vec<HashTableValue>,
     pub hash_table_generation: u32,
     pub move_ordering: MoveOrdering,
@@ -64,11 +91,62 @@ impl NegaAlpha {
         self.num_searched += 1;
 
         // 通常の評価
-        let value = if let Some(value) = self.position_value.last() {
+        let mut value = if let Some(value) = self.position_value.last() {
             (value.0 * VALUE_SCALE) as i32
         } else {
             panic!("Empty position_value.")
         };
+
+        // 入玉宣言用の補正評価
+        if matches!(
+            self.search_mode,
+            SearchMode::Priority27Point | SearchMode::Absolute27Point
+        ) {
+            for sq in Square::all() {
+                let pc = pos.piece_at(sq);
+                if let Some(pc) = pc {
+                    match pc {
+                        Piece::B_P
+                        | Piece::B_L
+                        | Piece::B_N
+                        | Piece::B_S
+                        | Piece::B_G
+                        | Piece::B_PP
+                        | Piece::B_PL
+                        | Piece::B_PN
+                        | Piece::B_PS
+                        | Piece::B_B
+                        | Piece::B_R
+                        | Piece::B_PB
+                        | Piece::B_PR => {
+                            value += (10 - sq.rank() as i32) * NON_KING_POSITION_SCALE;
+                        }
+                        Piece::B_K => {
+                            value += (10 - sq.rank() as i32) * KING_POSITION_SCALE;
+                        }
+                        Piece::W_P
+                        | Piece::W_L
+                        | Piece::W_N
+                        | Piece::W_S
+                        | Piece::W_G
+                        | Piece::W_PP
+                        | Piece::W_PL
+                        | Piece::W_PN
+                        | Piece::W_PS
+                        | Piece::W_B
+                        | Piece::W_R
+                        | Piece::W_PB
+                        | Piece::W_PR => {
+                            value -= sq.rank() as i32 * NON_KING_POSITION_SCALE;
+                        }
+                        Piece::W_K => {
+                            value -= sq.rank() as i32 * KING_POSITION_SCALE;
+                        }
+                        _ => unreachable!("Unrecognizable piece types."),
+                    }
+                }
+            }
+        }
 
         // 後手番なら評価値反転
         if pos.side_to_move() == Color::Black {
@@ -125,7 +203,16 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            return -MATING_VALUE + pos.ply() as i32;
+            // 絶対入玉モードでは相手を詰ますと負けにする
+            if matches!(self.search_mode, SearchMode::Absolute27Point) {
+                if pos.side_to_move() == self.my_turn {
+                    return -MATING_VALUE + pos.ply() as i32;
+                } else {
+                    return MATING_VALUE - pos.ply() as i32;
+                }
+            } else {
+                return -MATING_VALUE + pos.ply() as i32;
+            }
         }
 
         // 王手がかかっているかどうか
@@ -246,7 +333,16 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            return -MATING_VALUE + pos.ply() as i32;
+            // 絶対入玉モードでは相手を詰ますと負けにする
+            if matches!(self.search_mode, SearchMode::Absolute27Point) {
+                if pos.side_to_move() == self.my_turn {
+                    return -MATING_VALUE + pos.ply() as i32;
+                } else {
+                    return MATING_VALUE - pos.ply() as i32;
+                }
+            } else {
+                return -MATING_VALUE + pos.ply() as i32;
+            }
         }
 
         // 王手がかかっているかどうか
@@ -450,7 +546,16 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
-            return -MATING_VALUE + pos.ply() as i32;
+            // 絶対入玉モードでは相手を詰ますと負けにする
+            if matches!(self.search_mode, SearchMode::Absolute27Point) {
+                if pos.side_to_move() == self.my_turn {
+                    return -MATING_VALUE + pos.ply() as i32;
+                } else {
+                    return MATING_VALUE - pos.ply() as i32;
+                }
+            } else {
+                return -MATING_VALUE + pos.ply() as i32;
+            }
         }
 
         // ムーブオーダリング
