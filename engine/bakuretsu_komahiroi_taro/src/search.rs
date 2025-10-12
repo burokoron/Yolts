@@ -1024,4 +1024,5 @@ mod tests {
         );
         assert!(search::is_nyugyoku_win(&pos));
     }
+1026r .sed-tmp-search
 }

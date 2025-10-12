@@ -528,4 +528,5 @@ mod tests {
         );
         engine.go(&ppos, tsbook, &mut pos, &mut position_history, 10000);
     }
+530r .sed-tmp-main
 }
