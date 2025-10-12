@@ -148,7 +148,7 @@ impl BakuretsuKomahiroiTaro {
                     .expect("Cannot convert the set UseBook value.")
             }
             "SearchMode" => {
-                self.search_mode = value.clone();
+                self.search_mode = value;
                 self.searcher = None;
             }
             _ => (),
