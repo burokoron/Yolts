@@ -203,6 +203,7 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
+            // 絶対入玉モードでは相手を詰ますと負けにする
             if matches!(self.search_mode, SearchMode::Absolute27Point) {
                 if pos.side_to_move() == self.my_turn {
                     return -MATING_VALUE + pos.ply() as i32;
@@ -332,6 +333,7 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
+            // 絶対入玉モードでは相手を詰ますと負けにする
             if matches!(self.search_mode, SearchMode::Absolute27Point) {
                 if pos.side_to_move() == self.my_turn {
                     return -MATING_VALUE + pos.ply() as i32;
@@ -544,6 +546,7 @@ impl NegaAlpha {
         let legal_moves = pos.legal_moves();
         // 合法手なしなら
         if legal_moves.is_empty() {
+            // 絶対入玉モードでは相手を詰ますと負けにする
             if matches!(self.search_mode, SearchMode::Absolute27Point) {
                 if pos.side_to_move() == self.my_turn {
                     return -MATING_VALUE + pos.ply() as i32;
