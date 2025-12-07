@@ -337,11 +337,12 @@ def main(
                         x_test = []
                         y_test = []
                         test_file_number += 1
-    with open(f"{tmp_path}/train_{train_file_number}.pkl", "wb") as wf:
-        pickle.dump((x_train, y_train), wf)
-    with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as wf:
-        pickle.dump((x_test, y_test), wf)
-
+    if x_train:
+        with open(f"{tmp_path}/train_{train_file_number}.pkl", "wb") as wf:
+            pickle.dump((x_train, y_train), wf)
+    if x_test:
+        with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as wf:
+            pickle.dump((x_test, y_test), wf)
     del same_sfen
     # """
     # tmp_path 配下のファイル数から学習/評価ファイル数を決定
@@ -492,15 +493,15 @@ def main(
     print(f"dense: {dense.shape}")
     dense = dense.tolist()
 
-    eval_json: typing.TextIO = open(eval_json_path, "w")
-    json.dump(
-        {
-            "embedding": embedding,
-            "conv": conv,
-            "dense": dense,
-        },
-        eval_json,
-    )
+    with open(eval_json_path, "w") as eval_json:
+        json.dump(
+            {
+                "embedding": embedding,
+                "conv": conv,
+                "dense": dense,
+            },
+            eval_json,
+        )
 
 
 if __name__ == "__main__":

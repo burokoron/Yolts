@@ -141,9 +141,10 @@ impl ThompsonSamplingBook {
         //!   - path: String
         //!     - 定跡ファイルパス
 
-        let mut file = std::fs::File::create(path).unwrap();
-        let value = serde_json::to_string(&self.book).unwrap();
-        file.write_all(value.as_bytes()).unwrap();
+        let mut file = std::fs::File::create(&path).expect("Cannot create book file.");
+        let value = serde_json::to_string(&self.book).expect("Cannot serialize book to JSON.");
+        file.write_all(value.as_bytes())
+            .expect("Cannot write book file.");
     }
 
     pub fn make(&mut self, ppos: PartialPosition) -> Option<String> {
