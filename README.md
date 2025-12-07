@@ -44,6 +44,8 @@
 | [爆裂駒拾太郎 V 2.2.4](https://github.com/burokoron/Yolts/releases/tag/v3.6.4) | 1642 |
 | [爆裂駒拾太郎 V 3.0.2](https://github.com/burokoron/Yolts/releases/tag/v4.0.2) | 1714 |
 | [爆裂駒拾太郎 V 3.0.3](https://github.com/burokoron/Yolts/releases/tag/v4.0.3) | 1765 |
+| [爆裂駒拾太郎 V 3.1.0](https://github.com/burokoron/Yolts/releases/tag/v4.1.0) | 1787 |
+| [爆裂駒拾太郎 V 4.0.0](https://github.com/burokoron/Yolts/releases/tag/v4.2.0) | - |
 
 ## 更新履歴
 
@@ -52,6 +54,7 @@
     - 爆裂訓練太郎を爆裂駒拾太郎に統合
     - 標準出力をUTF-8に統一
     - PPe4-4型評価関数(第1世代)に変更
+    - レーティングの計測は中止
 - 2025/09/23
   - 爆裂駒拾太郎 V 3.1.0にアップデート
     - 指し手並び替えの評価にCounter Moveを追加
