@@ -1,7 +1,7 @@
 use rand_distr::{Beta, Distribution};
 use serde::{Deserialize, Serialize};
 use shogi_core::{Color, PartialPosition};
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Write};
 use yasai::Position;
 
 use crate::search;
@@ -132,6 +132,99 @@ impl ThompsonSamplingBook {
             );
         }
         best_move.map(search::move_to_sfen)
+    }
+
+    pub fn save(&self, path: String) {
+        //! 定跡ファイルの保存
+        //!
+        //! - Arguments
+        //!   - path: String
+        //!     - 定跡ファイルパス
+
+        let mut file = std::fs::File::create(path).unwrap();
+        let value = serde_json::to_string(&self.book).unwrap();
+        file.write_all(value.as_bytes()).unwrap();
+    }
+
+    pub fn make(&mut self, ppos: PartialPosition) -> Option<String> {
+        //! Thompson Samplingを用いた指し手の生成
+        //!
+        //! - 現在の局面が定跡登録済であれば指し手を生成する
+        //! - 現在の局面が定跡にないのであれば指し手を生成しない
+        //!
+        //! - Arguments
+        //!   - ppos: PartialPosition
+        //!     - 現在の局面
+        //! - Returns
+        //!   - best_move: Option<String>
+        //!     - sfen形式の指し手
+
+        if self.book.contains_key(&ppos.to_sfen_owned()) {
+            let pos = Position::new(ppos.clone());
+            let legal_moves = pos.legal_moves();
+            let mut best_value = -10.0;
+            let mut best_move = None;
+            for m in legal_moves {
+                let mut p = ppos.clone();
+                p.make_move(m);
+                if !p.ply_set(1) {
+                    panic!(
+                        "failed to set ply to 1: move={}, side_to_move={:?}, position_sfen={}",
+                        search::move_to_sfen(m),
+                        p.side_to_move(),
+                        p.to_sfen_owned()
+                    );
+                }
+                let (is_frequent_draw, alpha, beta) =
+                    if let Some(game_result) = self.book.get(&p.to_sfen_owned()) {
+                        (
+                            game_result.draw > game_result.black + game_result.white,
+                            (game_result.black + game_result.draw) as f32,
+                            (game_result.white + game_result.draw) as f32,
+                        )
+                    } else {
+                        (false, 1.0, 1.0)
+                    };
+                let rand_beta = Beta::new(alpha, beta)
+                    .expect("The beta distribution random number generator cannot be initialized.");
+                let value = if ppos.side_to_move() == Color::Black {
+                    rand_beta.sample(&mut self.rng)
+                } else {
+                    1.0 - rand_beta.sample(&mut self.rng)
+                };
+                if (0.495..0.505).contains(&value) && is_frequent_draw {
+                    continue;
+                }
+                if best_value < value {
+                    best_value = value;
+                    best_move = Some(m);
+                }
+            }
+            best_move.map(search::move_to_sfen)
+        } else {
+            None
+        }
+    }
+
+    pub fn entry(&mut self, ppos: PartialPosition, winner: Option<Color>) {
+        //! 定跡の登録
+        //!
+        //! - Arguments
+        //!   - ppos: PartialPosition
+        //!     - 現在の局面
+        //!   - winner: Option<Color>
+        //!     - 勝利したプレイヤー
+
+        let pos = self.book.entry(ppos.to_sfen_owned()).or_insert(GameResult {
+            black: 1,
+            white: 1,
+            draw: 0,
+        });
+        match winner {
+            Some(Color::Black) => pos.black += 1,
+            Some(Color::White) => pos.white += 1,
+            None => pos.draw += 1,
+        }
     }
 }
 

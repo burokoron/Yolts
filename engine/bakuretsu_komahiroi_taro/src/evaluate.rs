@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use shogi_core::{Color, Move, PieceKind, Square};
 use yasai::Position;
 
-pub const VALUE_SCALE: f32 = 2361.;
+pub const VALUE_SCALE: f32 = 2234.;
 
 #[derive(Deserialize, Serialize)]
 pub struct EvalJson {

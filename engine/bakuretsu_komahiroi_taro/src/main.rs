@@ -19,6 +19,7 @@ struct BakuretsuKomahiroiTaro {
     use_book: bool,
     search_mode: String,
     searcher: Option<search::NegaAlpha>,
+    tsbook: book::ThompsonSamplingBook,
 }
 
 impl BakuretsuKomahiroiTaro {
@@ -39,6 +40,7 @@ impl BakuretsuKomahiroiTaro {
             use_book: true,
             search_mode: search::SEARCH_MODE_STANDARD.to_string(),
             searcher: None,
+            tsbook: book::ThompsonSamplingBook::new(),
         }
     }
 
@@ -71,11 +73,8 @@ impl BakuretsuKomahiroiTaro {
         println!("usiok");
     }
 
-    fn isready(&mut self, tsbook: &mut book::ThompsonSamplingBook) {
+    fn isready(&mut self) {
         //! 対局の準備をする
-        //!
-        //! - Arguments
-        //!  - tsbook: &mut ThompsonSamplingBook
 
         // 探索準備
         if self.searcher.is_none() {
@@ -112,7 +111,7 @@ impl BakuretsuKomahiroiTaro {
         }
         // 定跡の読み込み
         if self.use_book {
-            tsbook.load(self.book_file_path.clone());
+            self.tsbook.load(self.book_file_path.clone());
         }
 
         println!("readyok");
@@ -242,7 +241,6 @@ impl BakuretsuKomahiroiTaro {
     fn go(
         &mut self,
         ppos: &PartialPosition,
-        tsbook: &mut book::ThompsonSamplingBook,
         pos: &mut Position,
         position_history: &mut HashSet<u64>,
         max_time: i32,
@@ -252,8 +250,6 @@ impl BakuretsuKomahiroiTaro {
         //! - Arguments
         //!   - ppos: &PartialPosition
         //!     - 現在の局面(shogi_core)
-        //!   - tsbook: &mut ThompsonSamplingBook
-        //!     - 定跡
         //!   - pos: &mut Position
         //!     - 現在の局面(yasai)
         //!   - position_history: &mut HashSet<u64>
@@ -266,7 +262,7 @@ impl BakuretsuKomahiroiTaro {
 
         // 定跡の検索
         if self.use_book {
-            if let Some(bestmove) = tsbook.search((*ppos).clone(), self.narrow_book) {
+            if let Some(bestmove) = self.tsbook.search((*ppos).clone(), self.narrow_book) {
                 return bestmove;
             }
         }
@@ -372,7 +368,6 @@ fn main() {
     let mut ppos = PartialPosition::default();
     let mut pos = Position::default();
     let mut position_history = HashSet::new();
-    let tsbook = &mut book::ThompsonSamplingBook::new();
 
     loop {
         // 入力の受け取り
@@ -393,7 +388,7 @@ fn main() {
             }
             "isready" => {
                 // 対局準備
-                engine.isready(tsbook);
+                engine.isready();
             }
             "setoption" => {
                 // エンジンのパラメータ設定
@@ -466,7 +461,7 @@ fn main() {
                     remain_move_number = 1
                 }
                 max_time = std::cmp::max(max_time / remain_move_number, min_time);
-                let m = engine.go(&ppos, tsbook, &mut pos, &mut position_history, max_time);
+                let m = engine.go(&ppos, &mut pos, &mut position_history, max_time);
                 println!("bestmove {}", m);
             }
             "stop" => {
@@ -486,6 +481,83 @@ fn main() {
                 // 対局終了
                 engine.gameover();
             }
+            "extra" => {
+                if inputs.len() < 2 {
+                    eprintln!("Error: 'extra' requires a subcommand");
+                    continue;
+                }
+                match &inputs[1][..] {
+                    "load" => {
+                        if inputs.len() < 3 {
+                            eprintln!("Error: 'extra load' requires a file path");
+                            continue;
+                        }
+                        // 定跡の読み込み
+                        engine.tsbook.load(inputs[2].clone());
+                    }
+                    "save" => {
+                        if inputs.len() < 3 {
+                            eprintln!("Error: 'extra save' requires a file path");
+                            continue;
+                        }
+                        // 定跡の保存
+                        engine.tsbook.save(inputs[2].clone());
+                    }
+                    "make" => {
+                        if inputs.len() < 5 {
+                            eprintln!("Error: 'extra make' requires position parameters");
+                            continue;
+                        }
+                        // Thompson Sampling に基づいて指し手を生成
+                        let ppos = match PartialPosition::from_usi(&format!(
+                            "sfen {} {} {} 1",
+                            inputs[2], inputs[3], inputs[4]
+                        )) {
+                            Ok(pos) => pos,
+                            Err(e) => {
+                                eprintln!("Error: Invalid SFEN format - {:?}", e);
+                                continue;
+                            }
+                        };
+                        let bestmove = engine.tsbook.make(ppos);
+                        if let Some(bestmove) = bestmove {
+                            println!("{}", bestmove);
+                        } else {
+                            println!("None");
+                        }
+                    }
+                    "entry" => {
+                        if inputs.len() < 6 {
+                            eprintln!(
+                                "Error: 'extra entry' requires position and winner parameters"
+                            );
+                            continue;
+                        }
+                        // 局面の勝敗を定跡に登録
+                        let ppos = match PartialPosition::from_usi(&format!(
+                            "sfen {} {} {} 1",
+                            inputs[2], inputs[3], inputs[4]
+                        )) {
+                            Ok(pos) => pos,
+                            Err(e) => {
+                                eprintln!("Error: Invalid SFEN format - {:?}", e);
+                                continue;
+                            }
+                        };
+                        let winner = match &inputs[5][..] {
+                            "b" => Some(Color::Black),
+                            "w" => Some(Color::White),
+                            "d" => None,
+                            _ => {
+                                eprintln!("Error: Winner must be 'b', 'w', or 'd'");
+                                continue;
+                            }
+                        };
+                        engine.tsbook.entry(ppos, winner);
+                    }
+                    _ => (),
+                }
+            }
             _ => (),
         }
     }
@@ -495,7 +567,6 @@ fn main() {
 mod tests {
     use std::io::Write;
 
-    use crate::book;
     use crate::evaluate;
     use crate::BakuretsuKomahiroiTaro;
 
@@ -517,8 +588,7 @@ mod tests {
         engine.setoption("EvalFile".to_string(), path.to_string());
         engine.setoption("DepthLimit".to_string(), "4".to_string());
         engine.setoption("UseBook".to_string(), "false".to_string());
-        let tsbook = &mut book::ThompsonSamplingBook::new();
-        engine.isready(tsbook);
+        engine.isready();
         let mut pos;
         let ppos;
         let mut position_history;
@@ -526,6 +596,6 @@ mod tests {
             "sfen lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
             vec!["7g7f"],
         );
-        engine.go(&ppos, tsbook, &mut pos, &mut position_history, 10000);
+        engine.go(&ppos, &mut pos, &mut position_history, 10000);
     }
 }
