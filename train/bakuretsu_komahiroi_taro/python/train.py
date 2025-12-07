@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import pickle
@@ -260,6 +261,7 @@ def main(
     root_path: str,
     tmp_path: str,
     checkpoint_path: str,
+    eval_json_path: str,
     train_ratio: float,
     value_scale: int,
     batch_size: int,
@@ -288,9 +290,25 @@ def main(
             values = kifu_dict[key]["value"]
 
             board: typing.Any = cshogi.Board()
-            for move, value in zip(moves, values):
+            for turn in range(len(moves) - 1):
+                move = moves[turn]
+                next_move = moves[turn + 1]
+                value = values[turn]
                 board.push_usi(move)
                 if value is not None:
+                    # 王手がかかっている局面はスキップ
+                    if board.is_check():
+                        continue
+                    # 次の手が王手の場合はスキップ
+                    board.push_usi(next_move)
+                    if board.is_check():
+                        board.pop()
+                        continue
+                    board.pop()
+                    # 次の手が駒取りの場合はスキップ
+                    if cshogi.move_cap(board.move_from_usi(next_move)) != 0:
+                        continue
+                    # 盤面のSFENを取得してデータセットに追加
                     sfen = board.sfen()
                     if " ".join(sfen.split(" ")[:-1]) in same_sfen:
                         continue
@@ -306,26 +324,39 @@ def main(
                     if len(x_train) == batch_size // 2:
                         with open(
                             f"{tmp_path}/train_{train_file_number}.pkl", "wb"
-                        ) as f:
-                            pickle.dump((x_train, y_train), f)
+                        ) as wf:
+                            pickle.dump((x_train, y_train), wf)
                         x_train = []
                         y_train = []
                         train_file_number += 1
                     if len(x_test) == batch_size // 2:
-                        with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as f:
-                            pickle.dump((x_test, y_test), f)
+                        with open(
+                            f"{tmp_path}/test_{test_file_number}.pkl", "wb"
+                        ) as wf:
+                            pickle.dump((x_test, y_test), wf)
                         x_test = []
                         y_test = []
                         test_file_number += 1
-    with open(f"{tmp_path}/train_{train_file_number}.pkl", "wb") as f:
-        pickle.dump((x_train, y_train), f)
-    with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as f:
-        pickle.dump((x_test, y_test), f)
-
+    if x_train:
+        with open(f"{tmp_path}/train_{train_file_number}.pkl", "wb") as wf:
+            pickle.dump((x_train, y_train), wf)
+    if x_test:
+        with open(f"{tmp_path}/test_{test_file_number}.pkl", "wb") as wf:
+            pickle.dump((x_test, y_test), wf)
     del same_sfen
     # """
-    # train_file_number = 27945
-    # test_file_number = 1397
+    # tmp_path 配下のファイル数から学習/評価ファイル数を決定
+    if not os.path.isdir(tmp_path):
+        raise FileNotFoundError(f"tmp_path が存在しません: {tmp_path}")
+
+    train_files = [
+        f for f in os.listdir(tmp_path) if f.startswith("train_") and f.endswith(".pkl")
+    ]
+    test_files = [
+        f for f in os.listdir(tmp_path) if f.startswith("test_") and f.endswith(".pkl")
+    ]
+    train_file_number = len(train_files) - 1
+    test_file_number = len(test_files) - 1
     train_dataset = TrainDataset(
         root_path=tmp_path,
         train_file_number=train_file_number + 1,
@@ -335,7 +366,7 @@ def main(
         dataset=train_dataset,
         batch_size=None,
         shuffle=False,
-        num_workers=8,
+        num_workers=4,
         pin_memory=True,
         persistent_workers=True,
     )
@@ -462,30 +493,44 @@ def main(
     print(f"dense: {dense.shape}")
     dense = dense.tolist()
 
-    eval_json: typing.TextIO = open("eval.json", "w")
-    json.dump(
-        {
-            "embedding": embedding,
-            "conv": conv,
-            "dense": dense,
-        },
-        eval_json,
-    )
+    with open(eval_json_path, "w") as eval_json:
+        json.dump(
+            {
+                "embedding": embedding,
+                "conv": conv,
+                "dense": dense,
+            },
+            eval_json,
+        )
 
 
 if __name__ == "__main__":
     root_path = "./kifu"  # 学習棋譜があるルートフォルダ
-    tmp_path = "./tmp"  # 一時保存データ用のフォルダ
-    checkpoint_path = "./checkpoint"  # モデルチェックポイントを保存するフォルダ
-    value_scale = 2361  # 学習時の評価値スケーリングパラメータ
-    train_ratio = 1.0  # 学習に使用する棋譜ファイルの割合
+    value_scale = 2234  # 学習時の評価値スケーリングパラメータ
     batch_size = 8192  # バッチサイズ
+
+    parser = argparse.ArgumentParser(description="Training script options")
+    parser.add_argument("--tmp-path", default="./tmp", help="一時保存データ用フォルダのパス")
+    parser.add_argument(
+        "--checkpoint-path", default="./checkpoint", help="チェックポイント保存先フォルダのパス"
+    )
+    parser.add_argument(
+        "--train-ratio", type=float, default=1.0, help="学習に使用する棋譜ファイルの割合(0-1)"
+    )
+    parser.add_argument(
+        "--eval-json",
+        dest="eval_json_path",
+        default="eval.json",
+        help="eval.json の出力パス",
+    )
+    args = parser.parse_args()
 
     main(
         root_path=root_path,
-        tmp_path=tmp_path,
-        checkpoint_path=checkpoint_path,
-        train_ratio=train_ratio,
+        tmp_path=args.tmp_path,
+        checkpoint_path=args.checkpoint_path,
+        eval_json_path=args.eval_json_path,
+        train_ratio=args.train_ratio,
         value_scale=value_scale,
         batch_size=batch_size,
     )

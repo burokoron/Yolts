@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use shogi_core::{Color, Move, PieceKind, Square};
 use yasai::Position;
 
-pub const VALUE_SCALE: f32 = 2361.;
+pub const VALUE_SCALE: f32 = 2234.;
 
 #[derive(Deserialize, Serialize)]
 pub struct EvalJson {
@@ -113,8 +113,8 @@ impl Evaluate {
                         if let Some(pc2) = pc2 {
                             let token = self.token[sq1.array_index()][pc1.as_u8() as usize]
                                 [sq2.array_index()][pc2.as_u8() as usize];
-                            for i in 0..hidden_size {
-                                out_embedding[idx][i] = self.embedding[token][i];
+                            for (i, embed) in out_embedding[idx].iter_mut().enumerate() {
+                                *embed = self.embedding[token][i];
                             }
                         }
                     }
@@ -132,8 +132,8 @@ impl Evaluate {
                     let count = hand.Hand_count(piece_type) as usize;
                     if count != 0 {
                         let token = self.token[0][0][hand_idx][count];
-                        for i in 0..hidden_size {
-                            out_embedding[idx][i] = self.embedding[token][i];
+                        for (i, embed) in out_embedding[idx].iter_mut().enumerate() {
+                            *embed = self.embedding[token][i];
                         }
                     }
                     idx += 1;
