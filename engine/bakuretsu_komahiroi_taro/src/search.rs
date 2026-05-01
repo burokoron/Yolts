@@ -13,8 +13,8 @@ const NULL_MOVE_MARGIN1: i32 = 21;
 const NULL_MOVE_MARGIN2: i32 = 421;
 const NULL_MOVE_DYNAMIC_GAMMA: i32 = 235;
 
-const KING_POSITION_SCALE: i32 = 99;
-const NON_KING_POSITION_SCALE: i32 = 1;
+const KING_POSITION_SCALE: i32 = 96;
+const NON_KING_POSITION_SCALE: i32 = 0;
 
 pub const SEARCH_MODE_STANDARD: &str = "Standard";
 pub const SEARCH_MODE_PRIORITY_27: &str = "Priority-27-Point";
