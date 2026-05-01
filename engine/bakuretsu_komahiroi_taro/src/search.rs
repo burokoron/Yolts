@@ -7,7 +7,7 @@ use crate::evaluate::Evaluate;
 use crate::evaluate::VALUE_SCALE;
 
 pub const MATING_VALUE: i32 = 30000;
-const FUTILITY_MARGIN: i32 = 109 * 2;
+const FUTILITY_MARGIN: i32 = 200;
 const FUTILITY_RETURN_DEPTH: u32 = 14;
 const NULL_MOVE_MARGIN1: i32 = 21;
 const NULL_MOVE_MARGIN2: i32 = 421;
