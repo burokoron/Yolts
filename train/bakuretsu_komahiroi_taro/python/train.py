@@ -233,7 +233,49 @@ class MLP(nn.Module):
     def __init__(self) -> None:
         super(MLP, self).__init__()
 
-        self.embedding = nn.Embedding(8673025, 4, padding_idx=0)
+        self.absolute_embedding = nn.Embedding(8673025, 4, padding_idx=0)
+        self.relative_embedding = nn.Embedding(147033, 4, padding_idx=0)
+
+        # 絶対位置特徴量テーブルの作成
+        absolute_features_table = np.zeros((95, 31, 95, 31), dtype=np.uint32)
+        idx = 0
+        for i in range(95):
+            for j in range(31):
+                for k in range(95):
+                    for m in range(31):
+                        absolute_features_table[i][j][k][m] = idx
+                        idx += 1
+        # 相対位置特徴量テーブルの作成
+        relative_features_table = np.zeros((31, 17, 9, 31), dtype=np.uint32)
+        idx = 0
+        for i in range(31):
+            for j in range(17):
+                for k in range(9):
+                    for m in range(31):
+                        relative_features_table[i][j][k][m] = idx
+                        idx += 1
+        # 絶対位置特徴量から相対位置特徴量への変換マップの作成
+        absolute_to_relative_map = np.zeros((95 * 31 * 95 * 31), dtype=np.int32)
+        for i in range(95):
+            for j in range(31):
+                for k in range(95):
+                    for m in range(31):
+                        if i < 81 and k < 81 and i < k:
+                            file_diff = (k % 9) - (i % 9)
+                            rank_diff = (k // 9) - (i // 9)
+                            abs_idx = absolute_features_table[i][j][k][m]
+                            rel_idx = relative_features_table[j][file_diff + 8][
+                                rank_diff
+                            ][m]
+                            absolute_to_relative_map[abs_idx] = rel_idx
+                        else:
+                            abs_idx = absolute_features_table[i][j][k][m]
+                            absolute_to_relative_map[abs_idx] = 0
+        # マッピングテーブル (絶対ID -> 相対ID)
+        # 学習時にGPUメモリに乗せておく
+        self.register_buffer(
+            "abs2rel", torch.tensor(absolute_to_relative_map, dtype=torch.int32)
+        )
 
         self.conv = nn.Conv1d(
             in_channels=4, out_channels=4, kernel_size=3335, groups=4, bias=False
@@ -244,7 +286,9 @@ class MLP(nn.Module):
         self.activation_2 = nn.Tanh()
 
     def forward(self, inputs: torch.Tensor) -> typing.Any:
-        x = self.embedding(inputs)
+        abs_embed = self.absolute_embedding(inputs)
+        rel_embed = self.relative_embedding(self.abs2rel[inputs])
+        x = abs_embed + rel_embed
 
         x = torch.transpose(x, dim0=1, dim1=2)
         x = self.conv(x)
@@ -389,7 +433,8 @@ def main(
 
     # 学習
     model = MLP()
-    model.embedding.weight.data.zero_()
+    model.absolute_embedding.weight.data.zero_()
+    model.relative_embedding.weight.data.zero_()
     # model.load_state_dict(torch.load(os.path.join(checkpoint_path, "checkpoint_epoch_3.pt"), weights_only=False))
     summary(model, input_data=torch.zeros([1, 3335], dtype=torch.int32))
     model.cuda()
@@ -481,9 +526,13 @@ def main(
 
     # jsonで保存
     # 埋め込み層
-    embedding = model.embedding.weight.cpu().detach().numpy()
-    print(f"embedding: {embedding.shape}")
-    embedding = embedding.tolist()
+    absolute_embedding = model.absolute_embedding.weight.cpu().detach().numpy()
+    relative_embedding = model.relative_embedding.weight.cpu().detach().numpy()
+    abs2rel = model.abs2rel.cpu().numpy()
+    print(f"absolute_embedding: {absolute_embedding.shape}")
+    print(f"relative_embedding: {relative_embedding.shape}")
+    embedding_merged = absolute_embedding + relative_embedding[abs2rel]
+    embedding = embedding_merged.tolist()
     # 畳み込み層
     conv = model.conv.weight.cpu().detach().numpy()
     print(f"conv: {conv.shape}")
@@ -506,7 +555,7 @@ def main(
 
 if __name__ == "__main__":
     root_path = "./kifu"  # 学習棋譜があるルートフォルダ
-    value_scale = 2234  # 学習時の評価値スケーリングパラメータ
+    value_scale = 2685  # 学習時の評価値スケーリングパラメータ
     batch_size = 8192  # バッチサイズ
 
     parser = argparse.ArgumentParser(description="Training script options")

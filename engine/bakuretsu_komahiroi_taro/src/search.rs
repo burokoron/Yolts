@@ -13,8 +13,8 @@ const NULL_MOVE_MARGIN1: i32 = 21;
 const NULL_MOVE_MARGIN2: i32 = 421;
 const NULL_MOVE_DYNAMIC_GAMMA: i32 = 235;
 
-const KING_POSITION_SCALE: i32 = 99;
-const NON_KING_POSITION_SCALE: i32 = 1;
+const KING_POSITION_SCALE: i32 = 96;
+const NON_KING_POSITION_SCALE: i32 = 0;
 
 pub const SEARCH_MODE_STANDARD: &str = "Standard";
 pub const SEARCH_MODE_PRIORITY_27: &str = "Priority-27-Point";
@@ -257,7 +257,7 @@ impl NegaAlpha {
                 }
             }
         }
-        move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
+        move_list.sort_by_key(|&i| -i.1);
         if !is_check {
             if let Some(first) = move_list.first().cloned() {
                 move_list.clear();
@@ -380,7 +380,7 @@ impl NegaAlpha {
                 move_list.push((m, value));
             }
         }
-        move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
+        move_list.sort_by_key(|&i| -i.1);
 
         for m in move_list {
             self.position_value.push(self.eval.inference_diff(
@@ -642,7 +642,7 @@ impl NegaAlpha {
                 self.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to];
             move_list.push((m, value));
         }
-        move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
+        move_list.sort_by_key(|&i| -i.1);
 
         // 全合法手展開
         let mut is_lmr = depth >= 2 && depth != self.max_depth;

@@ -259,7 +259,7 @@ impl NegaAlpha {
                 move_list.push((m, value));
             }
         }
-        move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
+        move_list.sort_by_key(|&i| -i.1);
 
         for m in move_list {
             position_value.push(self.eval.inference_diff(
@@ -479,7 +479,7 @@ impl NegaAlpha {
                 self.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to];
             move_list.push((m, value));
         }
-        move_list.sort_by(|&i, &j| (-i.1).cmp(&(-j.1)));
+        move_list.sort_by_key(|&i| -i.1);
 
         // 全合法手展開
         let mut is_lmr = depth >= 2 && depth != self.max_depth;
