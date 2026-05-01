@@ -646,6 +646,7 @@ impl NegaAlpha {
 
         // 全合法手展開
         let mut is_lmr = depth >= 2 && depth != self.max_depth;
+        let mut searched_moves = 0;
         self.position_history.insert(pos.key());
         for (move_count, m) in move_list.iter().enumerate() {
             self.position_value.push(self.eval.inference_diff(
@@ -663,30 +664,79 @@ impl NegaAlpha {
             };
             pos.do_move(m.0);
             // Late Move Reductions
-            if is_lmr && move_count >= 11 && !pos.in_check() {
-                let value = -self.search(
+            let mut is_lmr_researched = false;
+            let mut value = if is_lmr && move_count >= 11 && !pos.in_check() {
+                let reduced_value = -self.search(
                     pos,
                     false,
                     depth - 2,
-                    -beta,
+                    -best_value - 1,
                     -best_value,
                     Some((piece, m.0.to())),
                 );
-                if value <= best_value {
+                if reduced_value <= best_value {
                     pos.undo_move(m.0);
                     self.position_value.pop();
                     continue;
                 }
+
+                let full_depth_value = -self.search(
+                    pos,
+                    false,
+                    depth - 1,
+                    -best_value - 1,
+                    -best_value,
+                    Some((piece, m.0.to())),
+                );
+                if full_depth_value <= best_value {
+                    pos.undo_move(m.0);
+                    self.position_value.pop();
+                    continue;
+                }
+
+                is_lmr_researched = true;
+                if full_depth_value < beta {
+                    -self.search(
+                        pos,
+                        false,
+                        depth - 1,
+                        -beta,
+                        -best_value,
+                        Some((piece, m.0.to())),
+                    )
+                } else {
+                    full_depth_value
+                }
+            } else if searched_moves == 0 {
+                -self.search(
+                    pos,
+                    false,
+                    depth - 1,
+                    -beta,
+                    -best_value,
+                    Some((piece, m.0.to())),
+                )
+            } else {
+                -self.search(
+                    pos,
+                    false,
+                    depth - 1,
+                    -best_value - 1,
+                    -best_value,
+                    Some((piece, m.0.to())),
+                )
+            };
+            if !is_lmr_researched && searched_moves != 0 && best_value < value && value < beta {
+                value = -self.search(
+                    pos,
+                    false,
+                    depth - 1,
+                    -beta,
+                    -best_value,
+                    Some((piece, m.0.to())),
+                );
             }
-            // 通常の探索
-            let value = -self.search(
-                pos,
-                false,
-                depth - 1,
-                -beta,
-                -best_value,
-                Some((piece, m.0.to())),
-            );
+            searched_moves += 1;
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
