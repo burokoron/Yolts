@@ -103,6 +103,7 @@ impl BakuretsuKomahiroiTaro {
                 move_ordering: search::MoveOrdering {
                     piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                     continuation_history: vec![vec![vec![vec![0; 81]; 14]; 81]; 14],
+                    capture_history: vec![0; search::CAPTURE_HISTORY_SIZE],
                     killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
                     counter_move: vec![vec![vec![None; 2]; 81]; 14],
                 },
@@ -287,6 +288,7 @@ impl BakuretsuKomahiroiTaro {
             searcher.move_ordering = search::MoveOrdering {
                 piece_to_history: vec![vec![vec![0; 81]; 14]; 2],
                 continuation_history: vec![vec![vec![vec![0; 81]; 14]; 81]; 14],
+                capture_history: vec![0; search::CAPTURE_HISTORY_SIZE],
                 killer_heuristic: vec![vec![None; 2]; self.depth_limit as usize + 1],
                 counter_move: vec![vec![vec![None; 2]; 81]; 14],
             };

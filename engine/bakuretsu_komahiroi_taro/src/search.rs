@@ -15,6 +15,9 @@ const NULL_MOVE_DYNAMIC_GAMMA: i32 = 235;
 const RAZORING_IMPROVING_MARGIN: i32 = 128;
 const FUTILITY_IMPROVING_MARGIN: i32 = 32;
 const NULL_MOVE_IMPROVING_REDUCTION: u32 = 1;
+const HISTORY_PIECE_NUM: usize = 14;
+const HISTORY_SQUARE_NUM: usize = 81;
+pub const CAPTURE_HISTORY_SIZE: usize = HISTORY_PIECE_NUM * HISTORY_SQUARE_NUM * HISTORY_PIECE_NUM;
 
 const KING_POSITION_SCALE: i32 = 96;
 const NON_KING_POSITION_SCALE: i32 = 0;
@@ -54,6 +57,7 @@ pub struct HashTableValue {
 pub struct MoveOrdering {
     pub piece_to_history: Vec<Vec<Vec<i64>>>,
     pub continuation_history: Vec<Vec<Vec<Vec<i64>>>>,
+    pub capture_history: Vec<i64>,
     pub killer_heuristic: Vec<Vec<Option<Move>>>,
     pub counter_move: Vec<Vec<Vec<Option<Move>>>>,
 }
@@ -681,6 +685,17 @@ impl NegaAlpha {
                     [previous_move.0.piece_kind().array_index()][previous_move.1.array_index()]
                     [piece.piece_kind().array_index()][to];
             }
+            if let Move::Normal {
+                from: _,
+                to,
+                promote: _,
+            } = m
+            {
+                if let Some(captured_piece) = pos.piece_at(to) {
+                    value += self.move_ordering.capture_history
+                        [capture_history_index(piece, to, captured_piece)];
+                }
+            }
             move_list.push((m, value));
         }
         move_list.sort_by_key(|&i| -i.1);
@@ -826,6 +841,18 @@ impl NegaAlpha {
                         [previous_move.0.piece_kind().array_index()]
                         [previous_move.1.array_index()][piece.piece_kind().array_index()][to] +=
                         depth as i64 * depth as i64;
+                }
+                // Capture History
+                if let Move::Normal {
+                    from: _,
+                    to,
+                    promote: _,
+                } = m.0
+                {
+                    if let Some(captured_piece) = pos.piece_at(to) {
+                        let index = capture_history_index(piece, to, captured_piece);
+                        self.move_ordering.capture_history[index] += depth as i64 * depth as i64;
+                    }
                 }
                 // Counter Move
                 if let Some(previous_move) = previous_move {
@@ -1067,6 +1094,11 @@ pub fn is_nyugyoku_win(pos: &Position) -> bool {
     }
 
     false
+}
+
+fn capture_history_index(piece: Piece, to: Square, captured_piece: Piece) -> usize {
+    (piece.piece_kind().array_index() * HISTORY_SQUARE_NUM + to.array_index()) * HISTORY_PIECE_NUM
+        + captured_piece.piece_kind().array_index()
 }
 
 pub fn move_to_sfen(m: Move) -> String {
