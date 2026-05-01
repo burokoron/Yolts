@@ -50,6 +50,7 @@ pub struct HashTableValue {
 
 pub struct MoveOrdering {
     pub piece_to_history: Vec<Vec<Vec<i64>>>,
+    pub continuation_history: Vec<Vec<Vec<Vec<i64>>>>,
     pub killer_heuristic: Vec<Vec<Option<Move>>>,
     pub counter_move: Vec<Vec<Vec<Option<Move>>>>,
 }
@@ -640,6 +641,11 @@ impl NegaAlpha {
             let to = m.to().array_index();
             value +=
                 self.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to];
+            if let Some(previous_move) = previous_move {
+                value += self.move_ordering.continuation_history
+                    [previous_move.0.piece_kind().array_index()][previous_move.1.array_index()]
+                    [piece.piece_kind().array_index()][to];
+            }
             move_list.push((m, value));
         }
         move_list.sort_by_key(|&i| -i.1);
@@ -779,6 +785,13 @@ impl NegaAlpha {
                 let to = m.0.to().array_index();
                 self.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to] +=
                     depth as i64 * depth as i64;
+                // Continuation History
+                if let Some(previous_move) = previous_move {
+                    self.move_ordering.continuation_history
+                        [previous_move.0.piece_kind().array_index()]
+                        [previous_move.1.array_index()][piece.piece_kind().array_index()][to] +=
+                        depth as i64 * depth as i64;
+                }
                 // Counter Move
                 if let Some(previous_move) = previous_move {
                     let piece = previous_move.0;
