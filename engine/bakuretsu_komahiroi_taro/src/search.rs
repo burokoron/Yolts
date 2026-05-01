@@ -18,6 +18,7 @@ const NULL_MOVE_IMPROVING_REDUCTION: u32 = 1;
 const HISTORY_PIECE_NUM: usize = 14;
 const HISTORY_SQUARE_NUM: usize = 81;
 pub const CAPTURE_HISTORY_SIZE: usize = HISTORY_PIECE_NUM * HISTORY_SQUARE_NUM * HISTORY_PIECE_NUM;
+const LMR_MOVE_COUNT_BASE: usize = 2;
 
 const KING_POSITION_SCALE: i32 = 96;
 const NON_KING_POSITION_SCALE: i32 = 0;
@@ -721,7 +722,8 @@ impl NegaAlpha {
             pos.do_move(m.0);
             // Late Move Reductions
             let mut is_lmr_researched = false;
-            let mut value = if is_lmr && move_count >= 11 && !pos.in_check() {
+            let lmr_move_count_threshold = depth as usize * LMR_MOVE_COUNT_BASE;
+            let mut value = if is_lmr && move_count >= lmr_move_count_threshold && !pos.in_check() {
                 let reduced_value = -self.search(
                     pos,
                     false,
