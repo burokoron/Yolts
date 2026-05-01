@@ -12,6 +12,9 @@ const FUTILITY_RETURN_DEPTH: u32 = 14;
 const NULL_MOVE_MARGIN1: i32 = 21;
 const NULL_MOVE_MARGIN2: i32 = 421;
 const NULL_MOVE_DYNAMIC_GAMMA: i32 = 235;
+const RAZORING_IMPROVING_MARGIN: i32 = 128;
+const FUTILITY_IMPROVING_MARGIN: i32 = 32;
+const NULL_MOVE_IMPROVING_REDUCTION: u32 = 1;
 
 const KING_POSITION_SCALE: i32 = 96;
 const NON_KING_POSITION_SCALE: i32 = 0;
@@ -505,9 +508,28 @@ impl NegaAlpha {
         }
 
         let static_value = self.evaluate_diff(pos);
+        let improving = if self.position_value.len() >= 3 {
+            let previous_value =
+                (self.position_value[self.position_value.len() - 3].0 * VALUE_SCALE) as i32;
+            let previous_static_value = if pos.side_to_move() == Color::Black {
+                previous_value
+            } else {
+                -previous_value
+            };
+            static_value > previous_static_value
+        } else {
+            false
+        };
 
         // Razoring
-        if !in_check && static_value < alpha - 469 - 307 * depth as i32 * depth as i32 {
+        let razoring_margin = 469
+            + 307 * depth as i32 * depth as i32
+            + if improving {
+                RAZORING_IMPROVING_MARGIN
+            } else {
+                0
+            };
+        if !in_check && static_value < alpha - razoring_margin {
             let value = self.quiescence_search(pos, 3, alpha - 1, alpha);
             if value < alpha && value.abs() < MATING_VALUE - 1000 {
                 return value;
@@ -515,10 +537,17 @@ impl NegaAlpha {
         }
 
         // Futility Pruning
+        let futility_margin = (FUTILITY_MARGIN
+            - if improving {
+                FUTILITY_IMPROVING_MARGIN
+            } else {
+                0
+            })
+            * depth as i32;
         if !in_check
             && best_move.is_none()
             && depth < FUTILITY_RETURN_DEPTH
-            && static_value - FUTILITY_MARGIN * depth as i32 >= beta
+            && static_value - futility_margin >= beta
             && beta > -MATING_VALUE + 1000
             && static_value < MATING_VALUE - 1000
         {
@@ -533,8 +562,14 @@ impl NegaAlpha {
             && !in_check
             && !in_null_move
         {
-            let reduce =
-                ((static_value - beta) / NULL_MOVE_DYNAMIC_GAMMA).min(7) as u32 + depth / 3 + 5;
+            let reduce = ((static_value - beta) / NULL_MOVE_DYNAMIC_GAMMA).min(7) as u32
+                + depth / 3
+                + 5
+                + if improving {
+                    NULL_MOVE_IMPROVING_REDUCTION
+                } else {
+                    0
+                };
             pos.do_null_move();
             let value = -self.search(pos, true, depth - reduce.min(depth), -beta, -beta + 1, None);
             pos.undo_null_move();
