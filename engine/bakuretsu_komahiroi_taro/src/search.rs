@@ -527,7 +527,7 @@ impl NegaAlpha {
         };
 
         // Razoring
-        let razoring_margin = 380
+        let razoring_margin = 340
             + 307 * depth as i32 * depth as i32
             + if improving {
                 RAZORING_IMPROVING_MARGIN
