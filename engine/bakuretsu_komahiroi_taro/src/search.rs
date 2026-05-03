@@ -7,11 +7,13 @@ use crate::evaluate::Evaluate;
 use crate::evaluate::VALUE_SCALE;
 
 pub const MATING_VALUE: i32 = 30000;
+// 探索枝刈りの基準値。ここは自己対局ベンチで採用した値なので、単独で動かすと棋力が崩れやすい。
 const FUTILITY_MARGIN: i32 = 200;
 const FUTILITY_RETURN_DEPTH: u32 = 14;
 const NULL_MOVE_MARGIN1: i32 = 21;
 const NULL_MOVE_MARGIN2: i32 = 421;
 const NULL_MOVE_DYNAMIC_GAMMA: i32 = 235;
+// improving の局面では、直近より評価が良くなっているので枝刈りを少し控えめに調整する。
 const RAZORING_IMPROVING_MARGIN: i32 = 128;
 const FUTILITY_IMPROVING_MARGIN: i32 = 32;
 const NULL_MOVE_IMPROVING_REDUCTION: u32 = 1;
@@ -56,10 +58,15 @@ pub struct HashTableValue {
 }
 
 pub struct MoveOrdering {
+    // Piece To History: 手番・動かす駒種・移動先ごとに、beta cutoff を起こした実績を覚える。
     pub piece_to_history: Vec<Vec<Vec<i64>>>,
+    // Continuation History: 1手前の piece-to と今回の piece-to の組み合わせを評価する。
     pub continuation_history: Vec<Vec<Vec<Vec<i64>>>>,
+    // Capture History: 捕獲手を、動かす駒・移動先・取る駒種の組み合わせで評価する。
     pub capture_history: Vec<i64>,
+    // Killer Heuristic: 同じ深さで beta cutoff した非捕獲手を優先する。
     pub killer_heuristic: Vec<Vec<Option<Move>>>,
+    // Counter Move: 直前の相手手に対して良かった応手を優先する。
     pub counter_move: Vec<Vec<Vec<Option<Move>>>>,
 }
 
@@ -385,6 +392,8 @@ impl NegaAlpha {
                     }
                 }
             }
+            // quiescence search では、基本的に局面評価が大きく動く手だけを読む。
+            // 王手中は全応手、非王手時は王手をかける手と捕獲手だけを残す。
             if is_check || pos.is_check_move(m) || value > 0 {
                 move_list.push((m, value));
             }
@@ -513,6 +522,8 @@ impl NegaAlpha {
         }
 
         let static_value = self.evaluate_diff(pos);
+        // improving は「2 ply 前の同じ手番の静的評価より良いか」を見る。
+        // 良くなっている局面では無理に刈ると tactical な手を落としやすいので、各 pruning の強さを調整する。
         let improving = if self.position_value.len() >= 3 {
             let previous_value =
                 (self.position_value[self.position_value.len() - 3].0 * VALUE_SCALE) as i32;
@@ -527,6 +538,8 @@ impl NegaAlpha {
         };
 
         // Razoring
+        // alpha から大きく下回る局面では、通常探索に入る前に浅い quiescence search で見込みを確認する。
+        // それでも alpha に届かなければ、この局面を深く読む価値が低いとみなして返す。
         let razoring_margin = 340
             + 307 * depth as i32 * depth as i32
             + if improving {
@@ -542,6 +555,8 @@ impl NegaAlpha {
         }
 
         // Futility Pruning
+        // 静的評価だけで beta を十分超えているなら、子局面を読まずに fail-high として返す。
+        // Mate score 付近は通常評価と意味が違うので対象外にしている。
         let futility_margin = (FUTILITY_MARGIN
             - if improving {
                 FUTILITY_IMPROVING_MARGIN
@@ -560,6 +575,8 @@ impl NegaAlpha {
         }
 
         // Null Move Pruning
+        // 手番側が「何もしなくても」beta を超えるなら、通常の合法手でも十分良いと推定して枝刈りする。
+        // 王手中や null move 直後は危険なので無効化する。
         if depth != self.max_depth
             && depth >= 2
             && static_value >= beta - NULL_MOVE_MARGIN1 * depth as i32 + NULL_MOVE_MARGIN2
@@ -679,9 +696,12 @@ impl NegaAlpha {
                 Move::Drop { piece, to: _ } => piece,
             };
             let to = m.to().array_index();
+            // 以前に良い結果を出した piece-to は先に読む。
+            // History は探索結果から学習する軽量な move ordering 情報として使う。
             value +=
                 self.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to];
             if let Some(previous_move) = previous_move {
+                // 1手前の応酬として良かった手を優先する。単独の history より文脈を少し持てる。
                 value += self.move_ordering.continuation_history
                     [previous_move.0.piece_kind().array_index()][previous_move.1.array_index()]
                     [piece.piece_kind().array_index()][to];
@@ -693,6 +713,7 @@ impl NegaAlpha {
             } = m
             {
                 if let Some(captured_piece) = pos.piece_at(to) {
+                    // 捕獲手は MVV-LVA だけでなく、過去に cutoff した組み合わせも加点する。
                     value += self.move_ordering.capture_history
                         [capture_history_index(piece, to, captured_piece)];
                 }
@@ -721,9 +742,12 @@ impl NegaAlpha {
             };
             pos.do_move(m.0);
             // Late Move Reductions
+            // move ordering で後ろに来た手は有望度が低いので、まず浅く読む。
+            // 浅い探索で alpha を超えなければ、その手は深く読まずに捨てる。
             let mut is_lmr_researched = false;
             let lmr_move_count_threshold = depth as usize * LMR_MOVE_COUNT_BASE;
             let mut value = if is_lmr && move_count >= lmr_move_count_threshold && !pos.in_check() {
+                // LMR の一次探索。null window で安く「現在値を超えそうか」だけ確認する。
                 let reduced_value = -self.search(
                     pos,
                     false,
@@ -738,6 +762,7 @@ impl NegaAlpha {
                     continue;
                 }
 
+                // 浅い探索で見込みがあった手だけ、通常 depth の null window で再確認する。
                 let full_depth_value = -self.search(
                     pos,
                     false,
@@ -754,6 +779,7 @@ impl NegaAlpha {
 
                 is_lmr_researched = true;
                 if full_depth_value < beta {
+                    // null window で beta までは届かなかったが alpha は超えたので、広い window で正確な値を取り直す。
                     -self.search(
                         pos,
                         false,
@@ -766,6 +792,7 @@ impl NegaAlpha {
                     full_depth_value
                 }
             } else if searched_moves == 0 {
+                // PVS の先頭手は最も有望なので、通常 window で正確に読む。
                 -self.search(
                     pos,
                     false,
@@ -775,6 +802,7 @@ impl NegaAlpha {
                     Some((piece, m.0.to())),
                 )
             } else {
+                // 2手目以降は PVS の null window で、先頭手を超える可能性だけを安く確認する。
                 -self.search(
                     pos,
                     false,
@@ -785,6 +813,7 @@ impl NegaAlpha {
                 )
             };
             if !is_lmr_researched && searched_moves != 0 && best_value < value && value < beta {
+                // null window で alpha を超えた手は、値が不正確なので通常 window で再探索する。
                 value = -self.search(
                     pos,
                     false,
@@ -798,6 +827,7 @@ impl NegaAlpha {
             if best_value < value {
                 best_value = value;
                 best_move = Some(m.0);
+                // 序盤の手で改善が見つかった場合、以降の LMR を止めて読み落としを避ける。
                 if is_lmr && move_count < 11 {
                     is_lmr = false;
                 }
@@ -809,6 +839,8 @@ impl NegaAlpha {
             self.position_value.pop();
             if best_value >= beta {
                 // Killer Heuristic
+                // beta cutoff を起こした手は、同じ深さの別局面でも有効なことが多い。
+                // 2枠だけ保持し、新しい有効手を先頭に回す。
                 if self.move_ordering.killer_heuristic[(self.max_depth - depth) as usize][0]
                     .is_none()
                 {
@@ -825,6 +857,7 @@ impl NegaAlpha {
                     }
                 }
                 // Piece To History
+                // cutoff した手を depth^2 で加点する。深い探索で効いた手ほど信頼度を高く扱う。
                 let turn = pos.side_to_move().array_index();
                 let piece = match m.0 {
                     Move::Normal {
@@ -838,6 +871,7 @@ impl NegaAlpha {
                 self.move_ordering.piece_to_history[turn][piece.piece_kind().array_index()][to] +=
                     depth as i64 * depth as i64;
                 // Continuation History
+                // 直前の手への応手として cutoff したことを覚える。
                 if let Some(previous_move) = previous_move {
                     self.move_ordering.continuation_history
                         [previous_move.0.piece_kind().array_index()]
@@ -845,6 +879,7 @@ impl NegaAlpha {
                         depth as i64 * depth as i64;
                 }
                 // Capture History
+                // 捕獲手の成功履歴を覚え、次回以降の capture ordering に使う。
                 if let Move::Normal {
                     from: _,
                     to,
@@ -857,6 +892,7 @@ impl NegaAlpha {
                     }
                 }
                 // Counter Move
+                // 直前の相手手に対して強かった応手を覚える。次に同じ piece-to が出たら早めに読む。
                 if let Some(previous_move) = previous_move {
                     let piece = previous_move.0;
                     let to = previous_move.1.array_index();
