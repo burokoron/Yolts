@@ -49,6 +49,9 @@
 
 ## 更新履歴
 
+- 2026/06/08
+  - 爆裂駒拾太郎 V 4.1.0にアップデート
+    - PVS/Continuation History/Improving フラグ/Capture Historyの実装とその他調整
 - 2026/05/01
   - 爆裂駒拾太郎 V 4.1.0にアップデート
     - rPPe4-4型評価関数(第0世代)に変更
