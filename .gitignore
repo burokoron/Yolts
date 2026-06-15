@@ -1,0 +1,26 @@
+# Rust
+/target/
+
+# Python
+/.venv/
+/.uv-cache/
+/.pytest_cache/
+/.ruff_cache/
+/.mypy_cache/
+/.ty/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local editor and OS noise
+.DS_Store
+Thumbs.db
+
+# Tamanobori generated artifacts.
+# Keep workspace/README.md and workspace/logs/** tracked for human experiment notes.
+/workspace/runs/
+/workspace/datasets/
+/workspace/checkpoints/
+/workspace/eval_artifacts/
+/workspace/reanalyse/
+/workspace/scratch/

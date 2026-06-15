@@ -1,0 +1,35 @@
+[project]
+name = "tamanobori"
+version = "0.0.0"
+description = "Environment and Python tooling for Bakuretsu Tamanobori Taro."
+readme = "README.md"
+# 初期 scaffold では Python 3.11 だけを対象にする。上限を広げるのは、
+# Ruff、ty、pytest、将来の PyTorch 対応を新しい minor で確認してからにする。
+requires-python = ">=3.11,<3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.14.0",
+    "ty>=0.0.1a21",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["python"]
+testpaths = ["tests/python"]
+# Windows sandbox の権限で .pytest_cache がノイズになることがあるため、
+# pytest の cache provider は無効化する。
+addopts = ["-p", "no:cacheprovider"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+src = ["python", "tests/python"]
+exclude = [".archive"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

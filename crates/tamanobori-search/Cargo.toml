@@ -1,0 +1,12 @@
+[package]
+name = "tamanobori-search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tamanobori-core = { path = "../tamanobori-core" }
+
+[lints]
+workspace = true
