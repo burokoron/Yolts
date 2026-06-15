@@ -1,0 +1,7 @@
+interface:
+  display_name: "Emoji Commit Messages"
+  short_description: "Start commit subjects with one visible emoji"
+  default_prompt: "Use $emoji-commit-messages to write the next local commit message with one leading emoji."
+
+policy:
+  allow_implicit_invocation: true
