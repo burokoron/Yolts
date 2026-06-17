@@ -7,7 +7,10 @@ mod square;
 #[cfg(test)]
 mod tests;
 
-pub use move_label::{encode_move_label, move_label_from_parts, MoveLabelError, MoveLabelPlane};
+pub use move_label::{
+    decode_move_label, encode_move_label, move_label_from_parts, move_label_parts, MoveLabelError,
+    MoveLabelParts, MoveLabelPlane,
+};
 pub use piece::{Color, HandPiece, HandPieceError, Piece, PieceKind, HAND_PIECE_ORDER};
 pub use position::{Board, Hand, Move, Position};
 pub use sfen::{SfenError, STARTPOS_SFEN};

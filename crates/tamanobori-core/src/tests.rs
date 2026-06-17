@@ -40,6 +40,19 @@ fn expected_label(plane: MoveLabelPlane, to_square_current_view: Square) -> usiz
         .expect("test label parts are valid")
 }
 
+fn empty_position(side_to_move: Color) -> Position {
+    Position {
+        board: Board::empty(),
+        hand: Hand::empty(),
+        side_to_move,
+        ply: 1,
+    }
+}
+
+fn piece(color: Color, kind: PieceKind) -> Piece {
+    Piece { color, kind }
+}
+
 #[test]
 fn square_index_and_current_view_are_fixed() {
     let square = Square::new(2, 8).expect("square is valid");
@@ -258,6 +271,268 @@ fn long_range_moves_collapse_to_direction_and_destination() {
 }
 
 #[test]
+fn move_label_parts_use_plane_major_order() {
+    let label = expected_label(MoveLabelPlane::DropRook, square(9, 9));
+    let parts = move_label_parts(label).expect("label is valid");
+
+    assert_eq!(
+        parts,
+        MoveLabelParts {
+            plane: MoveLabelPlane::DropRook,
+            to_square_current_view: square(9, 9),
+        }
+    );
+    assert_eq!(
+        MoveLabelPlane::from_index(MoveLabelPlane::DropRook.index()),
+        Ok(MoveLabelPlane::DropRook)
+    );
+}
+
+#[test]
+fn move_label_plane_indices_round_trip_and_reject_upper_bound() {
+    for index in 0..MOVE_LABEL_PLANES {
+        let plane = MoveLabelPlane::from_index(index).expect("plane index is valid");
+        assert_eq!(plane.index(), index);
+    }
+
+    assert_eq!(
+        MoveLabelPlane::from_index(MOVE_LABEL_PLANES),
+        Err(MoveLabelError::PlaneOutOfRange {
+            plane: MOVE_LABEL_PLANES,
+        })
+    );
+}
+
+#[test]
+fn decode_forward_moves_round_trips_for_both_sides() {
+    let label = expected_label(MoveLabelPlane::Up, square(7, 6));
+
+    let mut black = empty_position(Color::Black);
+    black
+        .board
+        .set(square(7, 7), Some(piece(Color::Black, PieceKind::Pawn)));
+    let black_move = decode_move_label(label, &black).expect("black pawn source is present");
+    assert_eq!(
+        black_move,
+        Move::Normal {
+            from: square(7, 7),
+            to: square(7, 6),
+            promote: false,
+        }
+    );
+    assert_eq!(
+        encode_move_label(black_move, Color::Black),
+        Ok(label),
+        "decoded black move re-encodes to the same label"
+    );
+
+    let mut white = empty_position(Color::White);
+    white
+        .board
+        .set(square(3, 3), Some(piece(Color::White, PieceKind::Pawn)));
+    let white_move = decode_move_label(label, &white).expect("white pawn source is present");
+    assert_eq!(
+        white_move,
+        Move::Normal {
+            from: square(3, 3),
+            to: square(3, 4),
+            promote: false,
+        }
+    );
+    assert_eq!(
+        encode_move_label(white_move, Color::White),
+        Ok(label),
+        "decoded white move re-encodes to the same label"
+    );
+}
+
+#[test]
+fn decode_knight_moves_round_trip_for_both_planes() {
+    let position = {
+        let mut position = empty_position(Color::Black);
+        position
+            .board
+            .set(square(7, 3), Some(piece(Color::Black, PieceKind::Knight)));
+        position
+    };
+
+    for (plane, to) in [
+        (MoveLabelPlane::Up2Left, square(8, 1)),
+        (MoveLabelPlane::Up2Right, square(6, 1)),
+    ] {
+        let label = expected_label(plane, to);
+        let decoded = decode_move_label(label, &position).expect("knight source is present");
+
+        assert_eq!(
+            decoded,
+            Move::Normal {
+                from: square(7, 3),
+                to,
+                promote: false,
+            }
+        );
+        assert_eq!(encode_move_label(decoded, Color::Black), Ok(label));
+    }
+}
+
+#[test]
+fn decode_promotion_and_non_promotion_are_distinct() {
+    let plain = expected_label(MoveLabelPlane::Up, square(7, 2));
+    let promoted = expected_label(MoveLabelPlane::PromoteUp, square(7, 2));
+    let mut position = empty_position(Color::Black);
+    position
+        .board
+        .set(square(7, 3), Some(piece(Color::Black, PieceKind::Silver)));
+
+    let plain_move = decode_move_label(plain, &position).expect("plain silver move is present");
+    let promoted_move =
+        decode_move_label(promoted, &position).expect("promoting silver move is present");
+
+    assert_eq!(
+        plain_move,
+        Move::Normal {
+            from: square(7, 3),
+            to: square(7, 2),
+            promote: false,
+        }
+    );
+    assert_eq!(
+        promoted_move,
+        Move::Normal {
+            from: square(7, 3),
+            to: square(7, 2),
+            promote: true,
+        }
+    );
+    assert_eq!(encode_move_label(plain_move, Color::Black), Ok(plain));
+    assert_eq!(encode_move_label(promoted_move, Color::Black), Ok(promoted));
+}
+
+#[test]
+fn decode_promote_plane_rejects_already_promoted_piece() {
+    let label = expected_label(MoveLabelPlane::PromoteUpRight, square(5, 2));
+    let mut position = empty_position(Color::Black);
+    position
+        .board
+        .set(square(6, 3), Some(piece(Color::Black, PieceKind::Horse)));
+
+    assert_eq!(
+        decode_move_label(label, &position),
+        Err(MoveLabelError::NoMatchingSource {
+            plane: MoveLabelPlane::PromoteUpRight,
+            to: square(5, 2),
+        })
+    );
+}
+
+#[test]
+fn decode_long_range_sources_and_respects_blockers() {
+    let mut rook_position = empty_position(Color::Black);
+    rook_position
+        .board
+        .set(square(5, 9), Some(piece(Color::Black, PieceKind::Rook)));
+    assert_eq!(
+        decode_move_label(
+            expected_label(MoveLabelPlane::Up, square(5, 1)),
+            &rook_position
+        ),
+        Ok(Move::Normal {
+            from: square(5, 9),
+            to: square(5, 1),
+            promote: false,
+        })
+    );
+
+    let mut bishop_position = empty_position(Color::Black);
+    bishop_position
+        .board
+        .set(square(9, 9), Some(piece(Color::Black, PieceKind::Bishop)));
+    assert_eq!(
+        decode_move_label(
+            expected_label(MoveLabelPlane::UpRight, square(1, 1)),
+            &bishop_position
+        ),
+        Ok(Move::Normal {
+            from: square(9, 9),
+            to: square(1, 1),
+            promote: false,
+        })
+    );
+
+    let mut lance_position = empty_position(Color::Black);
+    lance_position
+        .board
+        .set(square(5, 9), Some(piece(Color::Black, PieceKind::Lance)));
+    assert_eq!(
+        decode_move_label(
+            expected_label(MoveLabelPlane::Up, square(5, 1)),
+            &lance_position
+        ),
+        Ok(Move::Normal {
+            from: square(5, 9),
+            to: square(5, 1),
+            promote: false,
+        })
+    );
+
+    rook_position
+        .board
+        .set(square(5, 3), Some(piece(Color::Black, PieceKind::Knight)));
+    assert_eq!(
+        decode_move_label(
+            expected_label(MoveLabelPlane::Up, square(5, 1)),
+            &rook_position
+        ),
+        Err(MoveLabelError::NoMatchingSource {
+            plane: MoveLabelPlane::Up,
+            to: square(5, 1),
+        })
+    );
+}
+
+#[test]
+fn decode_normal_move_allows_enemy_piece_capture() {
+    let label = expected_label(MoveLabelPlane::Up, square(5, 3));
+    let mut position = empty_position(Color::Black);
+    position
+        .board
+        .set(square(5, 9), Some(piece(Color::Black, PieceKind::Rook)));
+    position
+        .board
+        .set(square(5, 3), Some(piece(Color::White, PieceKind::Gold)));
+
+    let decoded = decode_move_label(label, &position).expect("enemy destination can be captured");
+
+    assert_eq!(
+        decoded,
+        Move::Normal {
+            from: square(5, 9),
+            to: square(5, 3),
+            promote: false,
+        }
+    );
+    assert_eq!(encode_move_label(decoded, Color::Black), Ok(label));
+}
+
+#[test]
+fn decode_drop_uses_hand_and_current_side_destination() {
+    let label = expected_label(MoveLabelPlane::DropBishop, square(7, 7));
+    let mut position = empty_position(Color::White);
+    position.hand.set_count(Color::White, HandPiece::Bishop, 1);
+
+    let decoded = decode_move_label(label, &position).expect("white bishop drop is available");
+
+    assert_eq!(
+        decoded,
+        Move::Drop {
+            piece: HandPiece::Bishop,
+            to: square(3, 3),
+        }
+    );
+    assert_eq!(encode_move_label(decoded, Color::White), Ok(label));
+}
+
+#[test]
 fn invalid_move_label_inputs_are_rejected() {
     assert_eq!(
         encode_move_label(
@@ -296,6 +571,58 @@ fn invalid_move_label_inputs_are_rejected() {
         move_label_from_parts(0, BOARD_SQUARES),
         Err(MoveLabelError::SquareIndexOutOfRange {
             index: BOARD_SQUARES,
+        })
+    );
+    assert_eq!(
+        move_label_parts(MOVE_LABEL_SIZE),
+        Err(MoveLabelError::LabelOutOfRange {
+            label: MOVE_LABEL_SIZE,
+        })
+    );
+}
+
+#[test]
+fn decode_rejects_position_mismatches() {
+    let up_to_55 = expected_label(MoveLabelPlane::Up, square(5, 5));
+    assert_eq!(
+        decode_move_label(up_to_55, &empty_position(Color::Black)),
+        Err(MoveLabelError::NoMatchingSource {
+            plane: MoveLabelPlane::Up,
+            to: square(5, 5),
+        })
+    );
+
+    let mut own_destination = empty_position(Color::Black);
+    own_destination
+        .board
+        .set(square(5, 5), Some(piece(Color::Black, PieceKind::Gold)));
+    assert_eq!(
+        decode_move_label(up_to_55, &own_destination),
+        Err(MoveLabelError::OwnPieceOnDestination {
+            square: square(5, 5),
+        })
+    );
+
+    let drop_label = expected_label(MoveLabelPlane::DropPawn, square(5, 5));
+    assert_eq!(
+        decode_move_label(drop_label, &empty_position(Color::Black)),
+        Err(MoveLabelError::MissingDropPiece {
+            color: Color::Black,
+            piece: HandPiece::Pawn,
+        })
+    );
+
+    let mut occupied_drop = empty_position(Color::Black);
+    occupied_drop
+        .hand
+        .set_count(Color::Black, HandPiece::Pawn, 1);
+    occupied_drop
+        .board
+        .set(square(5, 5), Some(piece(Color::White, PieceKind::Gold)));
+    assert_eq!(
+        decode_move_label(drop_label, &occupied_drop),
+        Err(MoveLabelError::OccupiedDropDestination {
+            square: square(5, 5),
         })
     );
 }
