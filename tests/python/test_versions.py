@@ -56,7 +56,7 @@ def test_network_output_shape_uses_move_label_size() -> None:
     assert shape.moves_left == (2, 1)
 
 
-def test_version_set_defaults_to_v0_bootstrap_versions() -> None:
+def test_version_set_defaults_match_shared_contract() -> None:
     contract = contract_values()
     versions = VersionSet()
 

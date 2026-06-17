@@ -11,7 +11,7 @@ USI_ID_NAME = "BakuretsuTamanoboriTaro"
 
 RULE_VERSION = "rule_v0"
 FEATURE_VERSION = "feature_v0"
-MOVE_LABEL_VERSION = "move_label_v0"
+MOVE_LABEL_VERSION = "move_label_v1_dlshogi27_current_side_plane_major"
 NETWORK_OUTPUT_VERSION = "network_output_v0"
 TARGET_VERSION = "target_v0"
 SELFPLAY_LOG_VERSION = "selfplay_log_v0"
