@@ -101,6 +101,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0c99c07667dfb58bac4cd9156e3d1ead9f3c78223a282301bc51f49b4efcf2d"
 
 [[package]]
+name = "shogi_usi_parser"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f39adab2055cf0bc5c9523b237e14ad9aba385bc7ebf90c9385876a48cef8c62"
+dependencies = [
+ "shogi_core",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -116,6 +125,7 @@ name = "tamanobori-core"
 version = "0.0.0"
 dependencies = [
  "shogi_core",
+ "shogi_usi_parser",
  "yasai",
 ]
 

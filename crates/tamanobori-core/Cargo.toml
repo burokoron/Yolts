@@ -7,6 +7,7 @@ repository.workspace = true
 
 [dependencies]
 shogi_core = "=0.1.4"
+shogi_usi_parser = "=0.1.0"
 yasai = { git = "https://github.com/burokoron/yasai/", rev = "b7bde8287d18b343920f4a9dd7e570729dd8d0ca" }
 
 [lints]

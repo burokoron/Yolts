@@ -1,9 +1,6 @@
 mod move_label;
-mod piece;
 mod position;
 mod rules;
-mod sfen;
-mod square;
 
 #[cfg(test)]
 mod tests;
@@ -12,11 +9,9 @@ pub use move_label::{
     decode_move_label, encode_move_label, move_label_from_parts, move_label_parts, MoveLabelError,
     MoveLabelParts, MoveLabelPlane,
 };
-pub use piece::{Color, HandPiece, HandPieceError, Piece, PieceKind, HAND_PIECE_ORDER};
-pub use position::{Board, Hand, Move, Position};
-pub use rules::{generate_legal_moves, RuleError};
-pub use sfen::{SfenError, STARTPOS_SFEN};
-pub use square::{Square, SquareError};
+pub use position::{Position, PositionError, RepetitionOutcome, STARTPOS_SFEN};
+pub use rules::{DeclarationRuleConfig, DeclarationWinInfo};
+pub use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 
 pub const FORMAL_NAME_JA: &str = "爆裂玉登太郎";
 pub const ROMANIZED_NAME: &str = "Bakuretsu Tamanobori Taro";
