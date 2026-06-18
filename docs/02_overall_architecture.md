@@ -253,19 +253,20 @@ SelfPlayGame logs
 
 ### 3.1 Rule / Position Core
 
-Rule / Position Core は、将棋ルールと局面状態の正本である。
+Rule / Position Core は、カスタム Yasai を局面状態・合法手・move 適用の正本として利用する。
+`shogi_core` の基本型をそのまま共有し、玉登太郎側で盤面表現や駒移動規則を再実装しない。
 
 責務は以下である。
 
 ```text
-Position / Board / Hand 表現
+Yasai Position と shogi_core 基本型の公開
 SFEN / USI 変換
-合法手生成
-move 適用 / undo
+Yasai への合法手生成、move 適用 / undo の委譲
 terminal 判定
-千日手管理
+通常千日手と連続王手の千日手に必要な履歴管理
 最大手数管理
-宣言勝ち可能判定のための rule feature 提供
+宣言勝ち可能判定
+固定 move label との変換
 ```
 
 以下は通常の終局理由ではなく、実装バグとして扱う。
@@ -655,6 +656,11 @@ TrainingPipelineManager は、target の中身、探索計算、loss 計算、�
 ```
 
 `Position` は rule layer の所有物であり、network や trainer は直接ルールを再実装しない。
+内部の将棋状態は `yasai::Position` だけが保持し、rule layer は千日手判定に必要な
+Zobrist key、王手状態、着手種別の履歴だけを追加保持する。
+
+優等局面・劣等局面は公式な終局判定ではなく探索省略用の関係であるため、初期実装には含めない。
+必要性を探索ベンチマークで確認した後、Yasai 側の履歴と一体化した API として検討する。
 
 ### 4.2 NetworkOutput
 

@@ -348,14 +348,16 @@ CI またはローカル test command で主要単体テストを一括実行で
 ### 5.2 実装対象
 
 ```text
-Position / Board / Hand 表現
+Yasai を正本とする Position 表現
+shogi_core 基本型の共有
 SFEN / USI 変換
 合法手生成
 move 適用 / undo
 terminal 判定
-千日手管理
+通常千日手 / 連続王手の千日手管理
 最大手数管理
 宣言勝ち可能判定
+1手詰め判定
 MoveLabelEncoder
 legal move labels
 softmax_legal 用 mask
@@ -371,6 +373,8 @@ move label は現在手番視点
 通常着手 label は盤上移動・成り移動・持ち駒打ちだけを表す
 合法手生成と move label encode の結果は一意である
 合法手生成・move 適用の異常はバグとして扱う
+駒移動規則と合法手判定を玉登太郎側で再実装しない
+優等局面・劣等局面は探索で必要性を確認するまで実装しない
 ```
 
 ### 5.4 通過条件
@@ -382,6 +386,8 @@ encode -> decode -> encode が一致する
 二歩・打ち歩詰め・行き所のない駒が合法手に出ない
 詰み局面で terminal 判定できる
 宣言勝ち可能局面を検出できる
+通常千日手と連続王手の千日手を区別できる
+1手詰め判定後に局面と履歴が復元される
 最大手数到達は max_ply_draw として扱える
 ```
 
