@@ -53,6 +53,19 @@ fn piece(color: Color, kind: PieceKind) -> Piece {
     Piece { color, kind }
 }
 
+fn assert_legal_move_labels_round_trip(position: &Position, moves: &[Move]) {
+    let mut labels = Vec::with_capacity(moves.len());
+    for &value in moves {
+        let label = encode_move_label(value, position.side_to_move)
+            .expect("every legal move has a move label");
+        assert_eq!(decode_move_label(label, position), Ok(value));
+        labels.push(label);
+    }
+    labels.sort_unstable();
+    labels.dedup();
+    assert_eq!(labels.len(), moves.len());
+}
+
 #[test]
 fn square_index_and_current_view_are_fixed() {
     let square = Square::new(2, 8).expect("square is valid");
@@ -624,6 +637,263 @@ fn decode_rejects_position_mismatches() {
         Err(MoveLabelError::OccupiedDropDestination {
             square: square(5, 5),
         })
+    );
+}
+
+#[test]
+fn startpos_legal_moves_are_unique_and_round_trip_through_labels() {
+    let position = Position::startpos();
+    let moves = generate_legal_moves(&position).expect("startpos is a valid rule position");
+    assert_eq!(moves.len(), 30);
+    assert_legal_move_labels_round_trip(&position, &moves);
+}
+
+#[test]
+fn white_startpos_legal_moves_use_the_same_current_side_labels() {
+    let black = Position::startpos();
+    let white =
+        Position::from_sfen("lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2")
+            .expect("white-to-move startpos SFEN is valid");
+
+    let mut black_labels = generate_legal_moves(&black)
+        .expect("black startpos is valid")
+        .into_iter()
+        .map(|value| encode_move_label(value, Color::Black).expect("legal move is encodable"))
+        .collect::<Vec<_>>();
+    let mut white_labels = generate_legal_moves(&white)
+        .expect("white startpos is valid")
+        .into_iter()
+        .map(|value| encode_move_label(value, Color::White).expect("legal move is encodable"))
+        .collect::<Vec<_>>();
+    black_labels.sort_unstable();
+    white_labels.sort_unstable();
+
+    assert_eq!(white_labels, black_labels);
+}
+
+#[test]
+fn legal_moves_enforce_forced_promotion_and_dead_drop_ranks() {
+    let mut position = empty_position(Color::Black);
+    position
+        .board
+        .set(square(9, 9), Some(piece(Color::Black, PieceKind::King)));
+    position
+        .board
+        .set(square(9, 1), Some(piece(Color::White, PieceKind::King)));
+    position
+        .board
+        .set(square(5, 2), Some(piece(Color::Black, PieceKind::Pawn)));
+    position.hand.set_count(Color::Black, HandPiece::Lance, 1);
+    position.hand.set_count(Color::Black, HandPiece::Knight, 1);
+
+    let moves = generate_legal_moves(&position).expect("fixture is a valid rule position");
+    assert_legal_move_labels_round_trip(&position, &moves);
+    assert!(moves.contains(&Move::Normal {
+        from: square(5, 2),
+        to: square(5, 1),
+        promote: true,
+    }));
+    assert!(!moves.contains(&Move::Normal {
+        from: square(5, 2),
+        to: square(5, 1),
+        promote: false,
+    }));
+    assert!(!moves.iter().any(|value| matches!(
+        value,
+        Move::Drop {
+            piece: HandPiece::Lance,
+            to,
+        } if to.rank == 1
+    )));
+    assert!(!moves.iter().any(|value| matches!(
+        value,
+        Move::Drop {
+            piece: HandPiece::Knight,
+            to,
+        } if to.rank <= 2
+    )));
+    assert!(moves.contains(&Move::Drop {
+        piece: HandPiece::Lance,
+        to: square(4, 5),
+    }));
+    assert!(moves.contains(&Move::Drop {
+        piece: HandPiece::Knight,
+        to: square(4, 5),
+    }));
+}
+
+#[test]
+fn legal_moves_reject_nifu_and_moves_that_expose_the_king() {
+    let mut position = empty_position(Color::Black);
+    position
+        .board
+        .set(square(5, 9), Some(piece(Color::Black, PieceKind::King)));
+    position
+        .board
+        .set(square(9, 1), Some(piece(Color::White, PieceKind::King)));
+    position
+        .board
+        .set(square(5, 1), Some(piece(Color::White, PieceKind::Rook)));
+    position
+        .board
+        .set(square(5, 8), Some(piece(Color::Black, PieceKind::Gold)));
+    position
+        .board
+        .set(square(3, 5), Some(piece(Color::Black, PieceKind::Pawn)));
+    position.hand.set_count(Color::Black, HandPiece::Pawn, 1);
+
+    let moves = generate_legal_moves(&position).expect("fixture is a valid rule position");
+    assert_legal_move_labels_round_trip(&position, &moves);
+    assert!(!moves.contains(&Move::Normal {
+        from: square(5, 8),
+        to: square(4, 8),
+        promote: false,
+    }));
+    assert!(!moves.iter().any(|value| matches!(
+        value,
+        Move::Drop {
+            piece: HandPiece::Pawn,
+            to,
+        } if to.file == 3
+    )));
+}
+
+#[test]
+fn legal_moves_include_captures_and_only_return_check_evasions() {
+    let capture_position = Position::from_sfen("k8/4s4/9/9/4R4/9/9/9/4K4 b - 1")
+        .expect("capture fixture is valid SFEN");
+    let capture_moves =
+        generate_legal_moves(&capture_position).expect("capture fixture is a valid rule position");
+    assert_legal_move_labels_round_trip(&capture_position, &capture_moves);
+    assert!(capture_moves.contains(&Move::Normal {
+        from: square(5, 5),
+        to: square(5, 2),
+        promote: false,
+    }));
+    assert!(capture_moves.contains(&Move::Normal {
+        from: square(5, 5),
+        to: square(5, 2),
+        promote: true,
+    }));
+
+    let checked_position =
+        Position::from_sfen("k3r4/9/9/9/9/9/9/9/4K4 b - 1").expect("checked fixture is valid SFEN");
+    let check_evasions =
+        generate_legal_moves(&checked_position).expect("checked fixture is a valid rule position");
+    assert_legal_move_labels_round_trip(&checked_position, &check_evasions);
+    let expected = [
+        Move::Normal {
+            from: square(5, 9),
+            to: square(4, 8),
+            promote: false,
+        },
+        Move::Normal {
+            from: square(5, 9),
+            to: square(6, 8),
+            promote: false,
+        },
+        Move::Normal {
+            from: square(5, 9),
+            to: square(4, 9),
+            promote: false,
+        },
+        Move::Normal {
+            from: square(5, 9),
+            to: square(6, 9),
+            promote: false,
+        },
+    ];
+    assert_eq!(check_evasions.len(), expected.len());
+    assert!(expected
+        .into_iter()
+        .all(|value| check_evasions.contains(&value)));
+}
+
+#[test]
+fn legal_moves_reuse_yasai_pawn_drop_mate_regression() {
+    let position = Position::from_sfen("9/7pp/8k/7P1/7G1/9/9/9/K8 b P2r2b3g4s4n4l14p 1")
+        .expect("pawn-drop-mate fixture is valid SFEN");
+
+    let moves = generate_legal_moves(&position).expect("fixture is a valid rule position");
+    assert_legal_move_labels_round_trip(&position, &moves);
+    assert!(!moves.contains(&Move::Drop {
+        piece: HandPiece::Pawn,
+        to: square(1, 4),
+    }));
+}
+
+#[test]
+fn invalid_rule_positions_return_errors_instead_of_reaching_yasai() {
+    assert_eq!(
+        generate_legal_moves(&empty_position(Color::Black)),
+        Err(RuleError::MissingKing {
+            color: Color::Black,
+        })
+    );
+
+    let mut duplicate_king = empty_position(Color::Black);
+    duplicate_king
+        .board
+        .set(square(5, 9), Some(piece(Color::Black, PieceKind::King)));
+    duplicate_king
+        .board
+        .set(square(4, 9), Some(piece(Color::Black, PieceKind::King)));
+    duplicate_king
+        .board
+        .set(square(5, 1), Some(piece(Color::White, PieceKind::King)));
+    assert_eq!(
+        generate_legal_moves(&duplicate_king),
+        Err(RuleError::MultipleKings {
+            color: Color::Black,
+        })
+    );
+
+    let mut excessive_hand = empty_position(Color::Black);
+    excessive_hand
+        .board
+        .set(square(5, 9), Some(piece(Color::Black, PieceKind::King)));
+    excessive_hand
+        .board
+        .set(square(5, 1), Some(piece(Color::White, PieceKind::King)));
+    excessive_hand
+        .hand
+        .set_count(Color::Black, HandPiece::Pawn, 19);
+    assert_eq!(
+        generate_legal_moves(&excessive_hand),
+        Err(RuleError::InvalidHandCount {
+            color: Color::Black,
+            piece: HandPiece::Pawn,
+            count: 19,
+        })
+    );
+
+    let mut excessive_material = Position::startpos();
+    excessive_material
+        .hand
+        .set_count(Color::Black, HandPiece::Pawn, 1);
+    assert_eq!(
+        generate_legal_moves(&excessive_material),
+        Err(RuleError::InvalidPieceCount {
+            kind: PieceKind::Pawn,
+            count: 19,
+            maximum: 18,
+        })
+    );
+
+    let opponent_in_check = Position::from_sfen("4k4/4R4/9/9/9/9/9/9/4K4 b - 1")
+        .expect("structurally valid SFEN can still be an illegal rule position");
+    assert_eq!(
+        generate_legal_moves(&opponent_in_check),
+        Err(RuleError::OpponentKingInCheck {
+            color: Color::White,
+        })
+    );
+
+    let mut zero_ply = Position::startpos();
+    zero_ply.ply = 0;
+    assert_eq!(
+        generate_legal_moves(&zero_ply),
+        Err(RuleError::InvalidPly { ply: 0 })
     );
 }
 

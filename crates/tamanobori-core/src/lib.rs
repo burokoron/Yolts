@@ -1,6 +1,7 @@
 mod move_label;
 mod piece;
 mod position;
+mod rules;
 mod sfen;
 mod square;
 
@@ -13,6 +14,7 @@ pub use move_label::{
 };
 pub use piece::{Color, HandPiece, HandPieceError, Piece, PieceKind, HAND_PIECE_ORDER};
 pub use position::{Board, Hand, Move, Position};
+pub use rules::{generate_legal_moves, RuleError};
 pub use sfen::{SfenError, STARTPOS_SFEN};
 pub use square::{Square, SquareError};
 
