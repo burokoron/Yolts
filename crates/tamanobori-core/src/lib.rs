@@ -8,8 +8,9 @@ mod view;
 mod tests;
 
 pub use feature::{
-    encode_piece_placement_features, piece_feature_plane, PieceFeatureSide, PiecePlacementFeatures,
-    PIECE_FEATURE_PLANES,
+    encode_hand_features, encode_piece_placement_features, hand_feature_plane, piece_feature_plane,
+    HandFeatures, PieceFeatureSide, PiecePlacementFeatures, HAND_FEATURE_PLANES,
+    HAND_FEATURE_PLANES_PER_SIDE, PIECE_FEATURE_PLANES,
 };
 pub use move_label::{
     decode_move_label, encode_legal_moves, encode_move_label, make_legal_move_mask,

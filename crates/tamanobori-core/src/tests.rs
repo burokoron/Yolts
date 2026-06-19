@@ -486,3 +486,185 @@ fn outcome_order_is_fixed() {
         ]
     );
 }
+
+#[test]
+fn hand_feature_contract_and_broadcast() {
+    assert_eq!(HAND_FEATURE_PLANES, 56);
+    assert_eq!(HAND_FEATURE_PLANES_PER_SIDE, 28);
+
+    // HAND_FEATURE_PLANES_PER_SIDE が HAND_PIECES_WITH_MAX_COUNT の合計値と一致することを検証
+    let expected_planes_per_side = crate::feature::HAND_PIECES_WITH_MAX_COUNT
+        .iter()
+        .map(|&(_, max)| max)
+        .sum::<usize>();
+    assert_eq!(HAND_FEATURE_PLANES_PER_SIDE, expected_planes_per_side);
+
+    // 1. 空の持ち駒（平手初期局面など）ではすべてのプレーンがfalseになること
+    let startpos = Position::startpos();
+    let start_features = encode_hand_features(&startpos);
+    for plane in &start_features {
+        assert!(plane.iter().all(|&val| !val));
+    }
+
+    // 各planeが盤面全体へ正しくbroadcastされていることを確認
+    let sfen_black = "4k4/9/9/9/9/9/9/9/4K4 b 3P4N5G1B8p1n4s2b3r 1";
+    let pos_black = Position::from_sfen(sfen_black).expect("valid sfen");
+    let features_black = encode_hand_features(&pos_black);
+    for plane in &features_black {
+        let first = plane[0];
+        assert!(plane.iter().all(|&val| val == first));
+    }
+
+    // 2. hand_feature_plane のアクセサ確認
+    // 正常系
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Own, PieceKind::Pawn, 1),
+        Some(0)
+    );
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Own, PieceKind::Pawn, 8),
+        Some(7)
+    );
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Own, PieceKind::Rook, 2),
+        Some(27)
+    );
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Opponent, PieceKind::Pawn, 1),
+        Some(28)
+    );
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Opponent, PieceKind::Rook, 2),
+        Some(55)
+    );
+
+    // 異常系・境界値
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Own, PieceKind::Pawn, 0),
+        None
+    );
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Own, PieceKind::Pawn, 9),
+        None
+    );
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Own, PieceKind::King, 1),
+        None
+    );
+    assert_eq!(
+        hand_feature_plane(PieceFeatureSide::Own, PieceKind::ProPawn, 1),
+        None
+    );
+}
+
+#[test]
+fn hand_feature_threshold_and_clip() {
+    // 閾値ちょうど、未満、上限を超える場合の動作検証
+    //
+    // NOTE: 以下のSFENは「金5枚」「飛3枚」など、ルール上は物理的に存在しない
+    // 不正な持ち駒枚数を含んでいますが、本テストは持ち駒特徴エンコーダが仕様上限（クリップ値）
+    // を超えた入力に対しても正しくクリップしてエンコードできるかを検証するための
+    // 純粋な単体テスト（境界値テスト）として割り切って設定しています。
+    let sfen_black = "4k4/9/9/9/9/9/9/9/4K4 b 3P4N5G1B8p1n4s2b3r 1";
+    let pos_black = Position::from_sfen(sfen_black).expect("valid sfen");
+    let features_black = encode_hand_features(&pos_black);
+
+    // 手番側（先手）の検証
+    // 歩 (8 planes, 0..8): 3枚なので、0, 1, 2番目がtrue、3..8がfalse
+    for (idx, plane) in features_black[0..8].iter().enumerate() {
+        if idx < 3 {
+            assert!(plane[0], "Own Pawn >= {} should be true", idx + 1);
+        } else {
+            assert!(!plane[0], "Own Pawn >= {} should be false", idx + 1);
+        }
+    }
+    // 香 (4 planes, 8..12): 0枚なので、すべてfalse
+    for plane in &features_black[8..12] {
+        assert!(!plane[0]);
+    }
+    // 桂 (4 planes, 12..16): 4枚なので、すべてtrue
+    for plane in &features_black[12..16] {
+        assert!(plane[0]);
+    }
+    // 銀 (4 planes, 16..20): 0枚なので、すべてfalse
+    for plane in &features_black[16..20] {
+        assert!(!plane[0]);
+    }
+    // 金 (4 planes, 20..24): 5枚なので、すべてtrue (上限4でクリップ)
+    for plane in &features_black[20..24] {
+        assert!(plane[0]);
+    }
+    // 角 (2 planes, 24..26): 1枚なので、24がtrue、25がfalse
+    assert!(features_black[24][0]);
+    assert!(!features_black[25][0]);
+    // 飛 (2 planes, 26..28): 0枚なので、すべてfalse
+    for plane in &features_black[26..28] {
+        assert!(!plane[0]);
+    }
+
+    // 相手側（後手）の検証
+    // 歩 (8 planes, 28..36): 8枚なので、すべてtrue
+    for plane in &features_black[28..36] {
+        assert!(plane[0]);
+    }
+    // 香 (4 planes, 36..40): 0枚なので、すべてfalse
+    for plane in &features_black[36..40] {
+        assert!(!plane[0]);
+    }
+    // 桂 (4 planes, 40..44): 1枚なので、40がtrue、41..44がfalse
+    assert!(features_black[40][0]);
+    for plane in &features_black[41..44] {
+        assert!(!plane[0]);
+    }
+    // 銀 (4 planes, 44..48): 4枚なので、すべてtrue
+    for plane in &features_black[44..48] {
+        assert!(plane[0]);
+    }
+    // 金 (4 planes, 48..52): 0枚なので、すべてfalse
+    for plane in &features_black[48..52] {
+        assert!(!plane[0]);
+    }
+    // 角 (2 planes, 52..54): 2枚なので、すべてtrue
+    for plane in &features_black[52..54] {
+        assert!(plane[0]);
+    }
+    // 飛 (2 planes, 54..56): 3枚なので、すべてtrue (上限2でクリップ)
+    for plane in &features_black[54..56] {
+        assert!(plane[0]);
+    }
+}
+
+#[test]
+fn hand_feature_symmetry() {
+    // 先後と手番を反転した同等局面で同じ特徴になるか確認（対称性テスト）
+    // 手番側（後手）: 歩3, 香0, 桂4, 銀0, 金5, 角1, 飛0 (SFEN: 3p4n5g1b)
+    // 相手側（先手）: 歩8, 香0, 桂1, 銀4, 金0, 角2, 飛3 (SFEN: 8P1N4S2B3R)
+    let sfen_black = "4k4/9/9/9/9/9/9/9/4K4 b 3P4N5G1B8p1n4s2b3r 1";
+    let pos_black = Position::from_sfen(sfen_black).expect("valid sfen");
+    let features_black = encode_hand_features(&pos_black);
+
+    let sfen_white = "4k4/9/9/9/9/9/9/9/4K4 w 8P1N4S2B3R3p4n5g1b 1";
+    let pos_white = Position::from_sfen(sfen_white).expect("valid sfen");
+    let features_white = encode_hand_features(&pos_white);
+
+    assert_eq!(features_black, features_white);
+}
+
+#[test]
+fn hand_feature_plane_matches_encoder_iteration_order() {
+    let mut expected = 0usize;
+    for &(kind, max) in crate::feature::HAND_PIECES_WITH_MAX_COUNT {
+        for threshold in 1..=max {
+            assert_eq!(
+                hand_feature_plane(PieceFeatureSide::Own, kind, threshold),
+                Some(expected),
+            );
+            assert_eq!(
+                hand_feature_plane(PieceFeatureSide::Opponent, kind, threshold),
+                Some(expected + HAND_FEATURE_PLANES_PER_SIDE),
+            );
+            expected += 1;
+        }
+    }
+    assert_eq!(expected, HAND_FEATURE_PLANES_PER_SIDE);
+}
