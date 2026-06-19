@@ -17,7 +17,11 @@ fn normal(from: (u8, u8), to: (u8, u8)) -> Move {
 fn play_cycle(position: &mut Position, cycle: &[Move], count: usize) {
     for _ in 0..count {
         for &value in cycle {
-            assert!(position.legal_moves().any(|candidate| candidate == value));
+            assert!(position
+                .as_ref()
+                .legal_moves()
+                .into_iter()
+                .any(|candidate| candidate == value));
             position.do_move(value);
         }
     }
@@ -41,6 +45,14 @@ fn move_label_parts_use_plane_major_order() {
     assert_eq!(parts.plane, MoveLabelPlane::DropRook);
     assert_eq!(parts.to_square_current_view, square(9, 9));
     assert_eq!(label, MoveLabelPlane::DropRook.index() * 81 + 80);
+}
+
+#[test]
+fn plane_square_index_is_rank_major() {
+    let square = square(1, 2);
+
+    assert_eq!(square.array_index(), 1);
+    assert_eq!(crate::view::plane_square_index(square), 9);
 }
 
 #[test]
@@ -105,6 +117,74 @@ fn current_side_move_labels_are_symmetric() {
 }
 
 #[test]
+fn piece_feature_contract_has_fixed_plane_order() {
+    assert_eq!(PIECE_FEATURE_PLANES, 28);
+
+    for (index, kind) in PieceKind::all().into_iter().enumerate() {
+        assert_eq!(piece_feature_plane(PieceFeatureSide::Own, kind), index);
+        assert_eq!(
+            piece_feature_plane(PieceFeatureSide::Opponent, kind),
+            PieceKind::NUM + index
+        );
+    }
+}
+
+#[test]
+fn startpos_piece_features_are_one_hot_and_side_symmetric() {
+    let black = Position::startpos();
+    let white =
+        Position::from_sfen("lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2")
+            .expect("white startpos is valid");
+    let black_features = encode_piece_placement_features(&black);
+    let white_features = encode_piece_placement_features(&white);
+
+    assert_eq!(black_features, white_features);
+    assert_eq!(
+        black_features
+            .iter()
+            .flatten()
+            .filter(|&&occupied| occupied)
+            .count(),
+        40
+    );
+    for square_index in 0..BOARD_SQUARES {
+        assert!(
+            black_features
+                .iter()
+                .filter(|plane| plane[square_index])
+                .count()
+                <= 1
+        );
+    }
+
+    let own_pawn = piece_feature_plane(PieceFeatureSide::Own, PieceKind::Pawn);
+    let opponent_pawn = piece_feature_plane(PieceFeatureSide::Opponent, PieceKind::Pawn);
+    assert!(black_features[own_pawn][6 * 9 + 6]);
+    assert!(black_features[opponent_pawn][2 * 9 + 2]);
+    assert!(!black_features[own_pawn][2 * 9 + 2]);
+}
+
+#[test]
+fn promoted_pieces_use_dedicated_feature_planes() {
+    let position = Position::from_sfen("4k4/9/9/5+r3/4+P4/9/9/9/4K4 b - 1")
+        .expect("promoted-piece fixture is valid");
+    let features = encode_piece_placement_features(&position);
+    let center = 4 * 9 + 4;
+    let opponent_rook_square = 3 * 9 + 3;
+
+    assert!(features[piece_feature_plane(PieceFeatureSide::Own, PieceKind::ProPawn)][center]);
+    assert!(!features[piece_feature_plane(PieceFeatureSide::Own, PieceKind::Pawn)][center]);
+    assert!(
+        features[piece_feature_plane(PieceFeatureSide::Opponent, PieceKind::ProRook)]
+            [opponent_rook_square]
+    );
+    assert!(
+        !features[piece_feature_plane(PieceFeatureSide::Opponent, PieceKind::Rook)]
+            [opponent_rook_square]
+    );
+}
+
+#[test]
 fn startpos_sfen_and_yasai_state_round_trip() {
     let mut position = Position::startpos();
     assert_eq!(
@@ -112,15 +192,20 @@ fn startpos_sfen_and_yasai_state_round_trip() {
         "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1"
     );
 
-    let before = (position.to_sfen(), position.keys());
-    let value = position.legal_moves().next().expect("startpos has moves");
+    let before = (position.to_sfen(), position.as_ref().keys());
+    let value = position
+        .as_ref()
+        .legal_moves()
+        .into_iter()
+        .next()
+        .expect("startpos has moves");
     position.do_move(value);
     position.undo_move(value);
-    assert_eq!((position.to_sfen(), position.keys()), before);
+    assert_eq!((position.to_sfen(), position.as_ref().keys()), before);
 
     position.do_null_move();
     position.undo_null_move();
-    assert_eq!((position.to_sfen(), position.keys()), before);
+    assert_eq!((position.to_sfen(), position.as_ref().keys()), before);
 }
 
 #[test]
@@ -134,7 +219,7 @@ fn legal_moves_have_unique_round_trip_labels() {
         )
         .expect("complex middle-game fixture is valid"),
     ] {
-        let moves = position.legal_moves().collect::<Vec<_>>();
+        let moves = position.as_ref().legal_moves();
         let encoded = encode_legal_moves(&position).expect("Yasai legal moves are encodable");
         assert_eq!(moves.len(), encoded.len());
 
@@ -331,26 +416,26 @@ fn csa27_declaration_win_uses_side_specific_thresholds() {
 fn mated_and_mate_in_one_use_yasai_state_and_restore_it() {
     let stalemate =
         Position::from_sfen("8k/6G2/7K1/9/9/9/9/9/9 w - 1").expect("stalemate fixture is valid");
-    assert!(!stalemate.in_check());
+    assert!(!stalemate.as_ref().in_check());
     assert!(!stalemate.is_mated());
 
     let terminal =
         Position::from_sfen("8k/6G2/7GR/9/9/9/9/9/K8 w - 1").expect("checkmate fixture is valid");
-    assert!(terminal.in_check());
+    assert!(terminal.as_ref().in_check());
     assert!(terminal.is_mated());
 
     let mut mate_in_one =
         Position::from_sfen("8k/9/6GK1/9/9/9/9/9/9 b R 1").expect("fixture is valid");
-    let before = (mate_in_one.to_sfen(), mate_in_one.keys());
+    let before = (mate_in_one.to_sfen(), mate_in_one.as_ref().keys());
     let winning_moves = mate_in_one.mate_in_one_moves();
     assert!(!winning_moves.is_empty());
-    assert_eq!((mate_in_one.to_sfen(), mate_in_one.keys()), before);
+    assert_eq!((mate_in_one.to_sfen(), mate_in_one.as_ref().keys()), before);
 }
 
 #[test]
 fn rule_terminal_outcome_treats_all_no_move_positions_as_losses() {
     let stalemate = Position::from_sfen("8k/6G2/7K1/9/9/9/9/9/9 w - 10").expect("fixture is valid");
-    assert!(!stalemate.in_check());
+    assert!(!stalemate.as_ref().in_check());
     assert!(!stalemate.is_mated());
     assert_eq!(
         stalemate.rule_terminal_outcome(Some(10)),
@@ -369,8 +454,8 @@ fn rule_terminal_outcome_treats_all_no_move_positions_as_losses() {
 #[test]
 fn rule_terminal_outcome_handles_max_ply_and_non_terminal_positions() {
     let checked = Position::from_sfen("k3r4/9/9/9/9/9/9/9/4K4 b - 9").expect("fixture is valid");
-    assert!(checked.in_check());
-    assert!(checked.legal_moves().next().is_some());
+    assert!(checked.as_ref().in_check());
+    assert!(!checked.as_ref().legal_moves().is_empty());
     assert_eq!(checked.rule_terminal_outcome(None), None);
     assert_eq!(checked.rule_terminal_outcome(Some(10)), None);
     assert_eq!(

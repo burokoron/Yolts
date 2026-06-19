@@ -48,12 +48,13 @@ pub struct DeclarationWinInfo {
 impl Position {
     #[must_use]
     pub fn declaration_win(&self, config: DeclarationRuleConfig) -> Option<DeclarationWinInfo> {
-        let side = self.side_to_move();
-        if self.in_check() {
+        let position: &yasai::Position = self.as_ref();
+        let side = position.side_to_move();
+        if position.in_check() {
             return None;
         }
         let king_in_enemy_camp = Square::all().any(|square| {
-            self.piece_at(square).is_some_and(|piece| {
+            position.piece_at(square).is_some_and(|piece| {
                 piece.color() == side
                     && piece.piece_kind() == PieceKind::King
                     && square.relative_rank(side) <= 3
@@ -66,7 +67,7 @@ impl Position {
         let mut points = 0_u16;
         let mut pieces_in_enemy_camp = 0_u8;
         for square in Square::all() {
-            let Some(piece) = self.piece_at(square) else {
+            let Some(piece) = position.piece_at(square) else {
                 continue;
             };
             if piece.color() != side
@@ -82,7 +83,7 @@ impl Position {
             return None;
         }
 
-        let hand = self.hand(side);
+        let hand = position.hand(side);
         for kind in Hand::all_hand_pieces() {
             let count = hand.count(kind).unwrap_or_default();
             points += u16::from(count) * piece_point(kind, config);

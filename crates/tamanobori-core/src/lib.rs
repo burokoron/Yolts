@@ -1,10 +1,16 @@
+mod feature;
 mod move_label;
 mod position;
 mod rules;
+mod view;
 
 #[cfg(test)]
 mod tests;
 
+pub use feature::{
+    encode_piece_placement_features, piece_feature_plane, PieceFeatureSide, PiecePlacementFeatures,
+    PIECE_FEATURE_PLANES,
+};
 pub use move_label::{
     decode_move_label, encode_legal_moves, encode_move_label, make_legal_move_mask,
     move_label_from_parts, move_label_parts, MoveLabelError, MoveLabelParts, MoveLabelPlane,

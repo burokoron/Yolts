@@ -1,3 +1,4 @@
+use crate::view::{current_view, plane_square_index};
 use crate::{
     Color, Move, PieceKind, Position, Square, BOARD_SQUARES, MOVE_LABEL_PLANES, MOVE_LABEL_SIZE,
 };
@@ -177,6 +178,7 @@ pub fn encode_move_label(value: Move, side_to_move: Color) -> Result<usize, Move
 ///
 /// 合法手をラベルで表せない場合、または複数の合法手が同じラベルになる場合に返す。
 pub fn encode_legal_moves(position: &Position) -> Result<Vec<usize>, MoveLabelError> {
+    let position: &yasai::Position = position.as_ref();
     let moves = position.legal_moves();
     let mut labels = Vec::with_capacity(moves.len());
     let mut seen = [false; MOVE_LABEL_SIZE];
@@ -201,6 +203,7 @@ pub fn encode_legal_moves(position: &Position) -> Result<Vec<usize>, MoveLabelEr
 pub fn make_legal_move_mask(
     position: &Position,
 ) -> Result<[bool; MOVE_LABEL_SIZE], MoveLabelError> {
+    let position: &yasai::Position = position.as_ref();
     let mut mask = [false; MOVE_LABEL_SIZE];
     for value in position.legal_moves() {
         let label = encode_move_label(value, position.side_to_move())?;
@@ -223,8 +226,10 @@ pub fn decode_move_label(label: usize, position: &Position) -> Result<Move, Move
     if label >= MOVE_LABEL_PLANES * BOARD_SQUARES {
         return Err(MoveLabelError::LabelOutOfRange { label });
     }
+    let position: &yasai::Position = position.as_ref();
     position
         .legal_moves()
+        .into_iter()
         .find(|&value| encode_move_label(value, position.side_to_move()) == Ok(label))
         .ok_or(MoveLabelError::NotLegalInPosition { label })
 }
@@ -275,15 +280,4 @@ const fn promoted_plane(plane: MoveLabelPlane) -> MoveLabelPlane {
         MoveLabelPlane::Up2Right => MoveLabelPlane::PromoteUp2Right,
         _ => unreachable!(),
     }
-}
-
-fn current_view(square: Square, side_to_move: Color) -> Square {
-    match side_to_move {
-        Color::Black => square,
-        Color::White => square.flip(),
-    }
-}
-
-fn plane_square_index(square: Square) -> usize {
-    usize::from(square.rank() - 1) * 9 + usize::from(square.file() - 1)
 }

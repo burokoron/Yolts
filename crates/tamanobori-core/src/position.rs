@@ -1,4 +1,4 @@
-use shogi_core::{Color, Hand, Move, PartialPosition, Piece, Square};
+use shogi_core::{Color, Move, PartialPosition, Square};
 use shogi_usi_parser::FromUsi;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,6 +40,12 @@ pub struct Position {
     history: Vec<HistoryEntry>,
 }
 
+impl AsRef<yasai::Position> for Position {
+    fn as_ref(&self) -> &yasai::Position {
+        &self.inner
+    }
+}
+
 impl Position {
     /// 平手初期局面を構築する。
     ///
@@ -77,46 +83,6 @@ impl Position {
         self.to_partial_position().to_sfen_owned()
     }
 
-    #[must_use]
-    pub fn side_to_move(&self) -> Color {
-        self.inner.side_to_move()
-    }
-
-    #[must_use]
-    pub fn ply(&self) -> u16 {
-        self.inner.ply()
-    }
-
-    #[must_use]
-    pub fn hand(&self, color: Color) -> Hand {
-        self.inner.hand(color)
-    }
-
-    #[must_use]
-    pub fn piece_at(&self, square: Square) -> Option<Piece> {
-        self.inner.piece_at(square)
-    }
-
-    #[must_use]
-    pub fn key(&self) -> u64 {
-        self.inner.key()
-    }
-
-    #[must_use]
-    pub fn keys(&self) -> (u64, u64) {
-        self.inner.keys()
-    }
-
-    #[must_use]
-    pub fn in_check(&self) -> bool {
-        self.inner.in_check()
-    }
-
-    #[must_use]
-    pub fn legal_moves(&self) -> impl ExactSizeIterator<Item = Move> {
-        self.inner.legal_moves().into_iter()
-    }
-
     /// 合法手を進める。
     ///
     /// # Panics
@@ -150,7 +116,7 @@ impl Position {
     /// 呼び出し側は探索のnull move pruning条件で王手中を除外する必要がある。
     pub fn do_null_move(&mut self) {
         assert!(
-            !self.in_check(),
+            !self.inner.in_check(),
             "null move must not be played while in check"
         );
         self.inner.do_null_move();
@@ -179,7 +145,7 @@ impl Position {
             .iter()
             .rposition(|entry| entry.transition == Transition::NullMove)
             .map_or(0, |index| index + 1);
-        let current_keys = self.keys();
+        let current_keys = self.inner.keys();
         let repetitions = self.history[start..]
             .iter()
             .enumerate()
@@ -205,7 +171,7 @@ impl Position {
                 entry.in_check
             });
             if moved && continuous {
-                return if self.side_to_move() == checker {
+                return if self.inner.side_to_move() == checker {
                     RepetitionOutcome::Loss
                 } else {
                     RepetitionOutcome::Win
@@ -234,7 +200,7 @@ impl Position {
         }
 
         max_ply
-            .is_some_and(|limit| self.ply() >= limit)
+            .is_some_and(|limit| self.inner.ply() >= limit)
             .then_some(RuleTerminalOutcome::MaxPlyDraw)
     }
 
@@ -242,11 +208,11 @@ impl Position {
     /// 王手されていないが合法手がないステイルメイトは含めない。
     #[must_use]
     pub fn is_mated(&self) -> bool {
-        self.in_check() && self.inner.legal_moves().is_empty()
+        self.inner.in_check() && self.inner.legal_moves().is_empty()
     }
 
     pub fn mate_in_one_moves(&mut self) -> Vec<Move> {
-        let moves = self.legal_moves().collect::<Vec<_>>();
+        let moves = self.inner.legal_moves();
         let mut mates = Vec::new();
         for value in moves {
             self.do_move(value);
@@ -269,13 +235,16 @@ impl Position {
 
     fn to_partial_position(&self) -> PartialPosition {
         let mut partial = PartialPosition::empty();
-        partial.side_to_move_set(self.side_to_move());
-        assert!(partial.ply_set(self.ply()), "Yasai ply is always nonzero");
+        partial.side_to_move_set(self.inner.side_to_move());
+        assert!(
+            partial.ply_set(self.inner.ply()),
+            "Yasai ply is always nonzero"
+        );
         for square in Square::all() {
-            partial.piece_set(square, self.piece_at(square));
+            partial.piece_set(square, self.inner.piece_at(square));
         }
         for color in Color::all() {
-            *partial.hand_of_a_player_mut(color) = self.hand(color);
+            *partial.hand_of_a_player_mut(color) = self.inner.hand(color);
         }
         partial
     }
