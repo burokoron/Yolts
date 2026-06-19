@@ -1,6 +1,6 @@
 use shogi_core::{Color, PieceKind, Square};
 
-use crate::Position;
+use crate::{position::hand_piece_count, Position};
 
 const HAND_PIECE_KINDS: [PieceKind; 7] = [
     PieceKind::Rook,
@@ -95,7 +95,7 @@ impl Position {
 
         let hand = self.hand(side);
         for kind in HAND_PIECE_KINDS {
-            let count = hand.count(kind).unwrap_or(0);
+            let count = hand_piece_count(hand, kind);
             points += u16::from(count) * piece_point(kind, config);
         }
         (points >= config.point_threshold(side)).then_some(DeclarationWinInfo {

@@ -104,7 +104,6 @@ pub enum MoveLabelError {
     UnrepresentableMove { from: Square, to: Square },
     UndroppablePiece { kind: PieceKind },
     NotLegalInPosition { label: usize },
-    AmbiguousLegalMove { label: usize },
 }
 
 /// plane-major形式の指し手ラベルを作る。
@@ -168,22 +167,20 @@ pub fn encode_move_label(value: Move, side_to_move: Color) -> Result<usize, Move
 }
 
 /// ラベルに一致する合法手をYasaiの合法手集合から復号する。
+/// 同じ着地点と方向に複数の駒が並ぶ場合、手前の駒が奥の駒を遮るため、
+/// 合法手集合では1つのラベルに最大1手だけが対応する。
 ///
 /// # Errors
 ///
-/// ラベルが不正、非合法、または複数の合法手へ対応する場合に返す。
+/// ラベルが不正または現在局面で非合法の場合に返す。
 pub fn decode_move_label(label: usize, position: &Position) -> Result<Move, MoveLabelError> {
-    move_label_parts(label)?;
-    let mut matched = position
-        .legal_moves()
-        .filter(|&value| encode_move_label(value, position.side_to_move()) == Ok(label));
-    let Some(value) = matched.next() else {
-        return Err(MoveLabelError::NotLegalInPosition { label });
-    };
-    if matched.next().is_some() {
-        return Err(MoveLabelError::AmbiguousLegalMove { label });
+    if label >= MOVE_LABEL_PLANES * BOARD_SQUARES {
+        return Err(MoveLabelError::LabelOutOfRange { label });
     }
-    Ok(value)
+    position
+        .legal_moves()
+        .find(|&value| encode_move_label(value, position.side_to_move()) == Ok(label))
+        .ok_or(MoveLabelError::NotLegalInPosition { label })
 }
 
 fn normal_move_base_plane(

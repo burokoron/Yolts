@@ -133,6 +133,13 @@ fn invalid_sfen_and_invalid_rule_position_are_rejected() {
         Position::from_sfen("not sfen"),
         Err(PositionError::InvalidSfenFieldCount { fields: 2 })
     ));
+    assert!(matches!(
+        Position::from_sfen("P3k4/9/9/9/9/9/9/9/4K4 b - 1"),
+        Err(PositionError::DeadPiece {
+            piece: Piece::B_P,
+            square: Square::SQ_9A
+        })
+    ));
 }
 
 #[test]
@@ -141,6 +148,10 @@ fn legal_moves_have_unique_round_trip_labels() {
         Position::startpos(),
         Position::from_sfen("lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2")
             .expect("white startpos is valid"),
+        Position::from_sfen(
+            "4+P1K2/6P+L+P/9/r+L3G2+b/ls3P3/5g3/3kn2br/1+l1+np2p+p/1s6s w P2gs2n10p 258",
+        )
+        .expect("complex middle-game fixture is valid"),
     ] {
         let mut labels = HashSet::new();
         for value in position.legal_moves() {
@@ -216,6 +227,14 @@ fn null_move_is_a_repetition_barrier_and_undo_restores_history() {
 }
 
 #[test]
+#[should_panic(expected = "null move must not be played while in check")]
+fn null_move_rejects_checked_position() {
+    let mut position =
+        Position::from_sfen("k3r4/9/9/9/9/9/9/9/4K4 b - 1").expect("checked fixture is valid");
+    position.do_null_move();
+}
+
+#[test]
 fn csa27_declaration_win_uses_side_specific_thresholds() {
     let position = Position::from_sfen(
         "4+P1K2/6P+L+P/9/r+L3G2+b/ls3P3/5g3/3kn2br/1+l1+np2p+p/1s6s w P2gs2n10p 258",
@@ -250,12 +269,45 @@ fn csa27_declaration_win_uses_side_specific_thresholds() {
         checked.declaration_win(DeclarationRuleConfig::csa27()),
         None
     );
+
+    let exact = Position::from_sfen("4K4/1PPPPPPPP/3BG4/9/9/9/9/9/4k4 b 2R4P 1")
+        .expect("exact threshold fixture is valid");
+    assert_eq!(
+        exact.declaration_win(DeclarationRuleConfig::csa27()),
+        Some(DeclarationWinInfo {
+            side: Color::Black,
+            points: 28,
+            pieces_in_enemy_camp: 10,
+        })
+    );
+
+    let insufficient_points = Position::from_sfen("4K4/1PPPPPPPP/3BG4/9/9/9/9/9/4k4 b 2R2P 1")
+        .expect("26-point fixture is valid");
+    assert_eq!(
+        insufficient_points.declaration_win(DeclarationRuleConfig::csa27()),
+        None
+    );
+
+    let insufficient_camp_pieces = Position::from_sfen("4K4/1PPPPPPPP/3B5/9/9/9/9/9/4k4 b 2R5P 1")
+        .expect("nine-piece fixture is valid");
+    assert_eq!(
+        insufficient_camp_pieces.declaration_win(DeclarationRuleConfig::csa27()),
+        None
+    );
 }
 
 #[test]
 fn mated_and_mate_in_one_use_yasai_state_and_restore_it() {
+    let stalemate =
+        Position::from_sfen("8k/6G2/7K1/9/9/9/9/9/9 w - 1").expect("stalemate fixture is valid");
+    assert!(!stalemate.in_check());
+    assert!(stalemate.has_no_legal_moves());
+    assert!(!stalemate.is_mated());
+
     let terminal =
-        Position::from_sfen("8k/6G2/7K1/9/9/9/9/9/9 w - 1").expect("checkmate fixture is valid");
+        Position::from_sfen("8k/6G2/7GR/9/9/9/9/9/K8 w - 1").expect("checkmate fixture is valid");
+    assert!(terminal.in_check());
+    assert!(terminal.has_no_legal_moves());
     assert!(terminal.is_mated());
 
     let mut mate_in_one =

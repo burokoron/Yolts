@@ -44,6 +44,10 @@ pub enum PositionError {
         count: u16,
         maximum: u16,
     },
+    DeadPiece {
+        piece: Piece,
+        square: Square,
+    },
     OpponentKingInCheck {
         color: Color,
     },
@@ -185,7 +189,17 @@ impl Position {
         self.history.pop();
     }
 
+    /// 王手されていない局面でnull moveを進める。
+    ///
+    /// # Panics
+    ///
+    /// 王手中に呼んだ場合にpanicする。Yasaiのnull moveは王手情報を引き継がないため、
+    /// 呼び出し側は探索のnull move pruning条件で王手中を除外する必要がある。
     pub fn do_null_move(&mut self) {
+        assert!(
+            !self.in_check(),
+            "null move must not be played while in check"
+        );
         self.inner.do_null_move();
         self.push_history(Transition::NullMove);
     }
@@ -249,8 +263,15 @@ impl Position {
     }
 
     #[must_use]
-    pub fn is_mated(&self) -> bool {
+    pub fn has_no_legal_moves(&self) -> bool {
         self.inner.legal_moves().is_empty()
+    }
+
+    /// 現在手番側が王手され、合法な応手がないかを返す。
+    /// 王手されていないが合法手がないステイルメイトは含めない。
+    #[must_use]
+    pub fn is_mated(&self) -> bool {
+        self.in_check() && self.has_no_legal_moves()
     }
 
     pub fn mate_in_one_moves(&mut self) -> Vec<Move> {
@@ -297,6 +318,9 @@ fn validate_position(position: &PartialPosition) -> Result<(), PositionError> {
             continue;
         };
         let kind = piece.piece_kind();
+        if is_dead_piece(kind, square.relative_rank(piece.color())) {
+            return Err(PositionError::DeadPiece { piece, square });
+        }
         if kind == PieceKind::King {
             king_counts[piece.color().array_index()] += 1;
         }
@@ -309,11 +333,8 @@ fn validate_position(position: &PartialPosition) -> Result<(), PositionError> {
             _ => return Err(PositionError::MultipleKings { color }),
         }
         for kind in HAND_PIECE_KINDS {
-            let count = position
-                .hand_of_a_player(color)
-                .count(kind)
-                .expect("hand piece kind is droppable");
-            let maximum = u8::try_from(maximum_material_count(kind)).unwrap_or(u8::MAX);
+            let count = hand_piece_count(position.hand_of_a_player(color), kind);
+            let maximum = maximum_hand_count(kind);
             if count > maximum {
                 return Err(PositionError::InvalidHandCount {
                     color,
@@ -346,6 +367,28 @@ fn validate_position(position: &PartialPosition) -> Result<(), PositionError> {
         }
     }
     Ok(())
+}
+
+pub(crate) fn hand_piece_count(hand: Hand, kind: PieceKind) -> u8 {
+    hand.count(kind)
+        .expect("HAND_PIECE_KINDS contains only droppable pieces")
+}
+
+const fn is_dead_piece(kind: PieceKind, relative_rank: u8) -> bool {
+    match kind {
+        PieceKind::Pawn | PieceKind::Lance => relative_rank == 1,
+        PieceKind::Knight => relative_rank <= 2,
+        _ => false,
+    }
+}
+
+const fn maximum_hand_count(kind: PieceKind) -> u8 {
+    match kind {
+        PieceKind::Pawn => 18,
+        PieceKind::Lance | PieceKind::Knight | PieceKind::Silver | PieceKind::Gold => 4,
+        PieceKind::Bishop | PieceKind::Rook => 2,
+        _ => unreachable!(),
+    }
 }
 
 const fn material_index(kind: PieceKind) -> usize {
