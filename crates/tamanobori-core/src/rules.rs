@@ -1,16 +1,6 @@
-use shogi_core::{Color, PieceKind, Square};
+use shogi_core::{Color, Hand, PieceKind, Square};
 
-use crate::{position::hand_piece_count, Position};
-
-const HAND_PIECE_KINDS: [PieceKind; 7] = [
-    PieceKind::Rook,
-    PieceKind::Bishop,
-    PieceKind::Gold,
-    PieceKind::Silver,
-    PieceKind::Knight,
-    PieceKind::Lance,
-    PieceKind::Pawn,
-];
+use crate::Position;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DeclarationRuleConfig {
@@ -62,11 +52,10 @@ impl Position {
         if self.in_check() {
             return None;
         }
-        let king = PieceKind::King;
         let king_in_enemy_camp = Square::all().any(|square| {
             self.piece_at(square).is_some_and(|piece| {
                 piece.color() == side
-                    && piece.piece_kind() == king
+                    && piece.piece_kind() == PieceKind::King
                     && square.relative_rank(side) <= 3
             })
         });
@@ -94,8 +83,8 @@ impl Position {
         }
 
         let hand = self.hand(side);
-        for kind in HAND_PIECE_KINDS {
-            let count = hand_piece_count(hand, kind);
+        for kind in Hand::all_hand_pieces() {
+            let count = hand.count(kind).unwrap_or_default();
             points += u16::from(count) * piece_point(kind, config);
         }
         (points >= config.point_threshold(side)).then_some(DeclarationWinInfo {

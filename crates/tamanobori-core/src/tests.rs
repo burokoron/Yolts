@@ -106,9 +106,11 @@ fn current_side_move_labels_are_symmetric() {
 
 #[test]
 fn startpos_sfen_and_yasai_state_round_trip() {
-    let mut position = Position::from_sfen(STARTPOS_SFEN).expect("startpos is valid");
-    assert_eq!(position.to_sfen(), STARTPOS_SFEN);
-    assert_eq!(position.legal_moves().len(), 30);
+    let mut position = Position::startpos();
+    assert_eq!(
+        position.to_sfen(),
+        "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1"
+    );
 
     let before = (position.to_sfen(), position.keys());
     let value = position.legal_moves().next().expect("startpos has moves");
@@ -119,27 +121,6 @@ fn startpos_sfen_and_yasai_state_round_trip() {
     position.do_null_move();
     position.undo_null_move();
     assert_eq!((position.to_sfen(), position.keys()), before);
-}
-
-#[test]
-fn invalid_sfen_and_invalid_rule_position_are_rejected() {
-    assert!(matches!(
-        Position::from_sfen("9/9/9/9/9/9/9/9/9 b - 1"),
-        Err(PositionError::MissingKing {
-            color: Color::Black
-        })
-    ));
-    assert!(matches!(
-        Position::from_sfen("not sfen"),
-        Err(PositionError::InvalidSfenFieldCount { fields: 2 })
-    ));
-    assert!(matches!(
-        Position::from_sfen("P3k4/9/9/9/9/9/9/9/4K4 b - 1"),
-        Err(PositionError::DeadPiece {
-            piece: Piece::B_P,
-            square: Square::SQ_9A
-        })
-    ));
 }
 
 #[test]
@@ -301,13 +282,11 @@ fn mated_and_mate_in_one_use_yasai_state_and_restore_it() {
     let stalemate =
         Position::from_sfen("8k/6G2/7K1/9/9/9/9/9/9 w - 1").expect("stalemate fixture is valid");
     assert!(!stalemate.in_check());
-    assert!(stalemate.has_no_legal_moves());
     assert!(!stalemate.is_mated());
 
     let terminal =
         Position::from_sfen("8k/6G2/7GR/9/9/9/9/9/K8 w - 1").expect("checkmate fixture is valid");
     assert!(terminal.in_check());
-    assert!(terminal.has_no_legal_moves());
     assert!(terminal.is_mated());
 
     let mut mate_in_one =

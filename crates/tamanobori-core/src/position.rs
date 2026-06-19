@@ -1,17 +1,5 @@
-use shogi_core::{Color, Hand, Move, PartialPosition, Piece, PieceKind, Square};
+use shogi_core::{Color, Hand, Move, PartialPosition, Piece, Square};
 use shogi_usi_parser::FromUsi;
-
-pub const STARTPOS_SFEN: &str = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
-
-const HAND_PIECE_KINDS: [PieceKind; 7] = [
-    PieceKind::Rook,
-    PieceKind::Bishop,
-    PieceKind::Gold,
-    PieceKind::Silver,
-    PieceKind::Knight,
-    PieceKind::Lance,
-    PieceKind::Pawn,
-];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RepetitionOutcome {
@@ -19,38 +7,6 @@ pub enum RepetitionOutcome {
     Draw,
     Win,
     Loss,
-}
-
-#[derive(Debug)]
-pub enum PositionError {
-    InvalidSfen(shogi_usi_parser::Error),
-    InvalidSfenFieldCount {
-        fields: usize,
-    },
-    MissingKing {
-        color: Color,
-    },
-    MultipleKings {
-        color: Color,
-    },
-    InvalidHandCount {
-        color: Color,
-        kind: PieceKind,
-        count: u8,
-        maximum: u8,
-    },
-    InvalidPieceCount {
-        kind: PieceKind,
-        count: u16,
-        maximum: u16,
-    },
-    DeadPiece {
-        piece: Piece,
-        square: Square,
-    },
-    OpponentKingInCheck {
-        color: Color,
-    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -77,46 +33,33 @@ pub struct Position {
 impl Position {
     /// 平手初期局面を構築する。
     ///
-    /// # Panics
-    ///
-    /// `shogi_core`の組み込み初期局面がYasaiの前提を満たさない場合にのみpanicする。
     #[must_use]
     pub fn startpos() -> Self {
         Self::from_partial(PartialPosition::startpos())
-            .expect("shogi_core start position must be valid")
     }
 
     /// SFENから局面を構築する。
     ///
     /// # Errors
     ///
-    /// `SFEN`の構文またはYasaiが前提とする局面条件が不正な場合に返す。
-    pub fn from_sfen(sfen: &str) -> Result<Self, PositionError> {
-        let fields = sfen.split_ascii_whitespace().count();
-        if fields != 4 {
-            return Err(PositionError::InvalidSfenFieldCount { fields });
-        }
-        let partial = PartialPosition::from_usi(&format!("sfen {sfen}"))
-            .map_err(PositionError::InvalidSfen)?;
-        Self::from_partial(partial)
+    /// `SFEN`の構文が不正な場合に返す。局面の合法性は呼び出し側の責務とする。
+    ///
+    /// # Panics
+    ///
+    /// `shogi_usi_parser`が受理した局面でも、持ち駒数などがYasaiの前提を
+    /// 満たさない場合は、Yasaiの局面構築中にpanicする可能性がある。
+    pub fn from_sfen(sfen: &str) -> Result<Self, shogi_usi_parser::Error> {
+        PartialPosition::from_usi(&format!("sfen {sfen}")).map(Self::from_partial)
     }
 
-    fn from_partial(partial: PartialPosition) -> Result<Self, PositionError> {
-        validate_position(&partial)?;
-        let opponent = partial.side_to_move().flip();
-        let mut opponent_partial = partial.clone();
-        opponent_partial.side_to_move_set(opponent);
-        if yasai::Position::new(opponent_partial).in_check() {
-            return Err(PositionError::OpponentKingInCheck { color: opponent });
-        }
-
+    fn from_partial(partial: PartialPosition) -> Self {
         let inner = yasai::Position::new(partial);
         let mut position = Self {
             inner,
             history: Vec::new(),
         };
         position.push_history(Transition::Initial);
-        Ok(position)
+        position
     }
 
     #[must_use]
@@ -262,16 +205,11 @@ impl Position {
         RepetitionOutcome::Draw
     }
 
-    #[must_use]
-    pub fn has_no_legal_moves(&self) -> bool {
-        self.inner.legal_moves().is_empty()
-    }
-
     /// 現在手番側が王手され、合法な応手がないかを返す。
     /// 王手されていないが合法手がないステイルメイトは含めない。
     #[must_use]
     pub fn is_mated(&self) -> bool {
-        self.in_check() && self.has_no_legal_moves()
+        self.in_check() && self.inner.legal_moves().is_empty()
     }
 
     pub fn mate_in_one_moves(&mut self) -> Vec<Move> {
@@ -307,113 +245,5 @@ impl Position {
             *partial.hand_of_a_player_mut(color) = self.hand(color);
         }
         partial
-    }
-}
-
-fn validate_position(position: &PartialPosition) -> Result<(), PositionError> {
-    let mut king_counts = [0_u8; 2];
-    let mut piece_counts = [0_u16; 8];
-    for square in Square::all() {
-        let Some(piece) = position.piece_at(square) else {
-            continue;
-        };
-        let kind = piece.piece_kind();
-        if is_dead_piece(kind, square.relative_rank(piece.color())) {
-            return Err(PositionError::DeadPiece { piece, square });
-        }
-        if kind == PieceKind::King {
-            king_counts[piece.color().array_index()] += 1;
-        }
-        piece_counts[material_index(kind)] += 1;
-    }
-    for color in Color::all() {
-        match king_counts[color.array_index()] {
-            0 => return Err(PositionError::MissingKing { color }),
-            1 => {}
-            _ => return Err(PositionError::MultipleKings { color }),
-        }
-        for kind in HAND_PIECE_KINDS {
-            let count = hand_piece_count(position.hand_of_a_player(color), kind);
-            let maximum = maximum_hand_count(kind);
-            if count > maximum {
-                return Err(PositionError::InvalidHandCount {
-                    color,
-                    kind,
-                    count,
-                    maximum,
-                });
-            }
-            piece_counts[material_index(kind)] += u16::from(count);
-        }
-    }
-    for kind in [
-        PieceKind::Pawn,
-        PieceKind::Lance,
-        PieceKind::Knight,
-        PieceKind::Silver,
-        PieceKind::Gold,
-        PieceKind::Bishop,
-        PieceKind::Rook,
-        PieceKind::King,
-    ] {
-        let count = piece_counts[material_index(kind)];
-        let maximum = maximum_material_count(kind);
-        if count > maximum {
-            return Err(PositionError::InvalidPieceCount {
-                kind,
-                count,
-                maximum,
-            });
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn hand_piece_count(hand: Hand, kind: PieceKind) -> u8 {
-    hand.count(kind)
-        .expect("HAND_PIECE_KINDS contains only droppable pieces")
-}
-
-const fn is_dead_piece(kind: PieceKind, relative_rank: u8) -> bool {
-    match kind {
-        PieceKind::Pawn | PieceKind::Lance => relative_rank == 1,
-        PieceKind::Knight => relative_rank <= 2,
-        _ => false,
-    }
-}
-
-const fn maximum_hand_count(kind: PieceKind) -> u8 {
-    match kind {
-        PieceKind::Pawn => 18,
-        PieceKind::Lance | PieceKind::Knight | PieceKind::Silver | PieceKind::Gold => 4,
-        PieceKind::Bishop | PieceKind::Rook => 2,
-        _ => unreachable!(),
-    }
-}
-
-const fn material_index(kind: PieceKind) -> usize {
-    match kind {
-        PieceKind::Pawn | PieceKind::ProPawn => 0,
-        PieceKind::Lance | PieceKind::ProLance => 1,
-        PieceKind::Knight | PieceKind::ProKnight => 2,
-        PieceKind::Silver | PieceKind::ProSilver => 3,
-        PieceKind::Gold => 4,
-        PieceKind::Bishop | PieceKind::ProBishop => 5,
-        PieceKind::Rook | PieceKind::ProRook => 6,
-        PieceKind::King => 7,
-    }
-}
-
-const fn maximum_material_count(kind: PieceKind) -> u16 {
-    match kind {
-        PieceKind::Pawn => 18,
-        PieceKind::Lance | PieceKind::Knight | PieceKind::Silver | PieceKind::Gold => 4,
-        PieceKind::Bishop | PieceKind::Rook | PieceKind::King => 2,
-        PieceKind::ProPawn
-        | PieceKind::ProLance
-        | PieceKind::ProKnight
-        | PieceKind::ProSilver
-        | PieceKind::ProBishop
-        | PieceKind::ProRook => unreachable!(),
     }
 }
