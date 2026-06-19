@@ -134,14 +134,52 @@ fn legal_moves_have_unique_round_trip_labels() {
         )
         .expect("complex middle-game fixture is valid"),
     ] {
+        let moves = position.legal_moves().collect::<Vec<_>>();
+        let encoded = encode_legal_moves(&position).expect("Yasai legal moves are encodable");
+        assert_eq!(moves.len(), encoded.len());
+
         let mut labels = HashSet::new();
-        for value in position.legal_moves() {
-            let label = encode_move_label(value, position.side_to_move())
-                .expect("Yasai legal move is encodable");
+        for (value, label) in moves.into_iter().zip(encoded) {
             assert!(labels.insert(label));
             assert_eq!(decode_move_label(label, &position), Ok(value));
         }
     }
+}
+
+#[test]
+fn legal_move_mask_matches_encoded_legal_moves() {
+    for position in [
+        Position::startpos(),
+        Position::from_sfen("lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2")
+            .expect("white startpos is valid"),
+        Position::from_sfen(
+            "ln1g1g1nl/1ks3r2/1pp1ppbpp/p2p2p2/9/P1PP2P2/1P2PP1PP/1B1K2R2/LNSG1GSNL b Pp 31",
+        )
+        .expect("complex middle-game fixture is valid"),
+    ] {
+        let labels = encode_legal_moves(&position).expect("Yasai legal moves are encodable");
+        let mask = make_legal_move_mask(&position).expect("legal mask is constructible");
+
+        assert_eq!(
+            mask.iter().filter(|&&is_legal| is_legal).count(),
+            labels.len()
+        );
+        for label in labels {
+            assert!(mask[label]);
+        }
+        assert!(mask.iter().any(|&is_legal| !is_legal));
+    }
+}
+
+#[test]
+fn no_move_position_has_empty_labels_and_mask() {
+    let position = Position::from_sfen("8k/6G2/7K1/9/9/9/9/9/9 w - 10").expect("fixture is valid");
+
+    assert_eq!(encode_legal_moves(&position), Ok(Vec::new()));
+    assert_eq!(
+        make_legal_move_mask(&position),
+        Ok([false; MOVE_LABEL_SIZE])
+    );
 }
 
 #[test]

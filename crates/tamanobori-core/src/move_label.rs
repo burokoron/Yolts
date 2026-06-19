@@ -1,4 +1,6 @@
-use crate::{Color, Move, PieceKind, Position, Square, BOARD_SQUARES, MOVE_LABEL_PLANES};
+use crate::{
+    Color, Move, PieceKind, Position, Square, BOARD_SQUARES, MOVE_LABEL_PLANES, MOVE_LABEL_SIZE,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MoveLabelPlane {
@@ -104,6 +106,7 @@ pub enum MoveLabelError {
     UnrepresentableMove { from: Square, to: Square },
     UndroppablePiece { kind: PieceKind },
     NotLegalInPosition { label: usize },
+    DuplicateLegalLabel { label: usize },
 }
 
 /// plane-major形式の指し手ラベルを作る。
@@ -164,6 +167,49 @@ pub fn encode_move_label(value: Move, side_to_move: Color) -> Result<usize, Move
     };
     let current_to = current_view(to, side_to_move);
     move_label_from_parts(plane.index(), plane_square_index(current_to))
+}
+
+/// 現在局面の合法手を固定27 planeのラベルへ符号化する。
+///
+/// 返却順は[`Position::legal_moves`]と一致する。合法手がない場合は空のリストを返す。
+///
+/// # Errors
+///
+/// 合法手をラベルで表せない場合、または複数の合法手が同じラベルになる場合に返す。
+pub fn encode_legal_moves(position: &Position) -> Result<Vec<usize>, MoveLabelError> {
+    let moves = position.legal_moves();
+    let mut labels = Vec::with_capacity(moves.len());
+    let mut seen = [false; MOVE_LABEL_SIZE];
+    for value in moves {
+        let label = encode_move_label(value, position.side_to_move())?;
+        if seen[label] {
+            return Err(MoveLabelError::DuplicateLegalLabel { label });
+        }
+        seen[label] = true;
+        labels.push(label);
+    }
+    Ok(labels)
+}
+
+/// 現在局面の合法手ラベルだけを`true`にした固定長maskを作る。
+///
+/// 合法手がない場合は全要素が`false`のmaskを返す。
+///
+/// # Errors
+///
+/// 合法手をラベルで表せない場合、または複数の合法手が同じラベルになる場合に返す。
+pub fn make_legal_move_mask(
+    position: &Position,
+) -> Result<[bool; MOVE_LABEL_SIZE], MoveLabelError> {
+    let mut mask = [false; MOVE_LABEL_SIZE];
+    for value in position.legal_moves() {
+        let label = encode_move_label(value, position.side_to_move())?;
+        if mask[label] {
+            return Err(MoveLabelError::DuplicateLegalLabel { label });
+        }
+        mask[label] = true;
+    }
+    Ok(mask)
 }
 
 /// ラベルに一致する合法手をYasaiの合法手集合から復号する。

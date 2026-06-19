@@ -6,8 +6,8 @@ mod rules;
 mod tests;
 
 pub use move_label::{
-    decode_move_label, encode_move_label, move_label_from_parts, move_label_parts, MoveLabelError,
-    MoveLabelParts, MoveLabelPlane,
+    decode_move_label, encode_legal_moves, encode_move_label, make_legal_move_mask,
+    move_label_from_parts, move_label_parts, MoveLabelError, MoveLabelParts, MoveLabelPlane,
 };
 pub use position::{Position, RepetitionOutcome, RuleTerminalOutcome};
 pub use rules::{DeclarationRuleConfig, DeclarationWinInfo};
