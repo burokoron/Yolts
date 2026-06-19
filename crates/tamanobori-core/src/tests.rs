@@ -156,6 +156,10 @@ fn quiet_fourfold_repetition_is_draw() {
     ];
     play_cycle(&mut position, &cycle, 3);
     assert_eq!(position.repetition_outcome(), RepetitionOutcome::Draw);
+    assert_eq!(
+        position.rule_terminal_outcome(None),
+        Some(RuleTerminalOutcome::RepetitionDraw)
+    );
 }
 
 #[test]
@@ -173,6 +177,10 @@ fn perpetual_checker_loses_from_current_side_perspective() {
         checker_to_move.repetition_outcome(),
         RepetitionOutcome::Loss
     );
+    assert_eq!(
+        checker_to_move.rule_terminal_outcome(None),
+        Some(RuleTerminalOutcome::PerpetualCheckLoss)
+    );
 
     let mut checked_side_to_move =
         Position::from_sfen("4k4/4R4/9/9/9/9/9/9/K8 w - 1").expect("fixture is valid");
@@ -186,6 +194,10 @@ fn perpetual_checker_loses_from_current_side_perspective() {
     assert_eq!(
         checked_side_to_move.repetition_outcome(),
         RepetitionOutcome::Win
+    );
+    assert_eq!(
+        checked_side_to_move.rule_terminal_outcome(None),
+        Some(RuleTerminalOutcome::PerpetualCheckWin)
     );
 }
 
@@ -295,6 +307,47 @@ fn mated_and_mate_in_one_use_yasai_state_and_restore_it() {
     let winning_moves = mate_in_one.mate_in_one_moves();
     assert!(!winning_moves.is_empty());
     assert_eq!((mate_in_one.to_sfen(), mate_in_one.keys()), before);
+}
+
+#[test]
+fn rule_terminal_outcome_treats_all_no_move_positions_as_losses() {
+    let stalemate = Position::from_sfen("8k/6G2/7K1/9/9/9/9/9/9 w - 10").expect("fixture is valid");
+    assert!(!stalemate.in_check());
+    assert!(!stalemate.is_mated());
+    assert_eq!(
+        stalemate.rule_terminal_outcome(Some(10)),
+        Some(RuleTerminalOutcome::NoLegalMovesLoss)
+    );
+
+    let checkmate =
+        Position::from_sfen("8k/6G2/7GR/9/9/9/9/9/K8 w - 10").expect("fixture is valid");
+    assert!(checkmate.is_mated());
+    assert_eq!(
+        checkmate.rule_terminal_outcome(None),
+        Some(RuleTerminalOutcome::NoLegalMovesLoss)
+    );
+}
+
+#[test]
+fn rule_terminal_outcome_handles_max_ply_and_non_terminal_positions() {
+    let checked = Position::from_sfen("k3r4/9/9/9/9/9/9/9/4K4 b - 9").expect("fixture is valid");
+    assert!(checked.in_check());
+    assert!(checked.legal_moves().next().is_some());
+    assert_eq!(checked.rule_terminal_outcome(None), None);
+    assert_eq!(checked.rule_terminal_outcome(Some(10)), None);
+    assert_eq!(
+        checked.rule_terminal_outcome(Some(9)),
+        Some(RuleTerminalOutcome::MaxPlyDraw)
+    );
+
+    let declaration = Position::from_sfen(
+        "4+P1K2/6P+L+P/9/r+L3G2+b/ls3P3/5g3/3kn2br/1+l1+np2p+p/1s6s w P2gs2n10p 258",
+    )
+    .expect("declaration fixture is valid");
+    assert!(declaration
+        .declaration_win(DeclarationRuleConfig::csa27())
+        .is_some());
+    assert_eq!(declaration.rule_terminal_outcome(None), None);
 }
 
 #[test]

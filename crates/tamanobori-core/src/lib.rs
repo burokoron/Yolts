@@ -9,7 +9,7 @@ pub use move_label::{
     decode_move_label, encode_move_label, move_label_from_parts, move_label_parts, MoveLabelError,
     MoveLabelParts, MoveLabelPlane,
 };
-pub use position::{Position, RepetitionOutcome};
+pub use position::{Position, RepetitionOutcome, RuleTerminalOutcome};
 pub use rules::{DeclarationRuleConfig, DeclarationWinInfo};
 pub use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 

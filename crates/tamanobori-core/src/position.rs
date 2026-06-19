@@ -9,6 +9,16 @@ pub enum RepetitionOutcome {
     Loss,
 }
 
+/// 現在手番側から見たルール由来の終局結果。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RuleTerminalOutcome {
+    NoLegalMovesLoss,
+    RepetitionDraw,
+    PerpetualCheckWin,
+    PerpetualCheckLoss,
+    MaxPlyDraw,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Transition {
     Initial,
@@ -203,6 +213,29 @@ impl Position {
             }
         }
         RepetitionOutcome::Draw
+    }
+
+    /// 合法手、千日手、最大手数から現在局面の終局結果を返す。
+    ///
+    /// 合法手なし、千日手、最大手数の順に判定し、先に成立した結果を優先する。
+    /// そのため、最大手数に到達した局面でも合法手がなければ敗北を返す。
+    /// 宣言勝ちは通常着手とは別のrule actionとして扱うため、この判定には含めない。
+    #[must_use]
+    pub fn rule_terminal_outcome(&self, max_ply: Option<u16>) -> Option<RuleTerminalOutcome> {
+        if self.inner.legal_moves().is_empty() {
+            return Some(RuleTerminalOutcome::NoLegalMovesLoss);
+        }
+
+        match self.repetition_outcome() {
+            RepetitionOutcome::None => {}
+            RepetitionOutcome::Draw => return Some(RuleTerminalOutcome::RepetitionDraw),
+            RepetitionOutcome::Win => return Some(RuleTerminalOutcome::PerpetualCheckWin),
+            RepetitionOutcome::Loss => return Some(RuleTerminalOutcome::PerpetualCheckLoss),
+        }
+
+        max_ply
+            .is_some_and(|limit| self.ply() >= limit)
+            .then_some(RuleTerminalOutcome::MaxPlyDraw)
     }
 
     /// 現在手番側が王手され、合法な応手がないかを返す。
