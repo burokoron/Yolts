@@ -144,3 +144,101 @@ fn encode_one_side_hand(hand: Hand, planes: &mut [[bool; BOARD_SQUARES]]) {
         plane_idx += max_count;
     }
 }
+
+/// 手番側と相手側それぞれの利き数しきい値面数。
+const ATTACK_COUNT_FEATURE_PLANES_PER_SIDE: usize = 3;
+
+/// 手番側14面と相手側14面を合わせた駒種別利き特徴数。
+const ATTACK_PIECE_FEATURE_PLANES: usize = PieceKind::NUM * 2;
+
+/// 駒種別利き28面と利き数しきい値6面を合わせた利き特徴数。
+pub const ATTACK_FEATURE_PLANES: usize =
+    ATTACK_PIECE_FEATURE_PLANES + ATTACK_COUNT_FEATURE_PLANES_PER_SIDE * 2;
+
+/// plane-major形式の利き特徴。
+pub type AttackFeatures = [[bool; BOARD_SQUARES]; ATTACK_FEATURE_PLANES];
+
+/// 駒種別利き特徴における手番側/相手側のplane offset。
+///
+/// 値は盤上駒特徴の `PieceFeatureSide::offset()` と同じ 14+14 構成だが、
+/// 利き特徴は独立した plane 領域のためあえて別関数とする。
+const fn attack_piece_feature_side_offset(side: PieceFeatureSide) -> usize {
+    match side {
+        PieceFeatureSide::Own => 0,
+        PieceFeatureSide::Opponent => PieceKind::NUM,
+    }
+}
+
+/// 現在手番視点の所有者と駒種から駒種別利き特徴のplane indexを返す。
+#[must_use]
+pub const fn attack_feature_plane(side: PieceFeatureSide, kind: PieceKind) -> usize {
+    attack_piece_feature_side_offset(side) + kind.array_index()
+}
+
+/// 現在手番視点の所有者と利き数しきい値（`1..=3`）から利き数特徴のplane indexを返す。
+///
+/// しきい値が有効範囲外の場合は `None` を返す。
+#[must_use]
+pub const fn attack_count_feature_plane(side: PieceFeatureSide, threshold: usize) -> Option<usize> {
+    if threshold == 0 || threshold > ATTACK_COUNT_FEATURE_PLANES_PER_SIDE {
+        return None;
+    }
+
+    let side_offset = match side {
+        PieceFeatureSide::Own => ATTACK_PIECE_FEATURE_PLANES,
+        PieceFeatureSide::Opponent => {
+            ATTACK_PIECE_FEATURE_PLANES + ATTACK_COUNT_FEATURE_PLANES_PER_SIDE
+        }
+    };
+    Some(side_offset + (threshold - 1))
+}
+
+/// 局面を現在手番視点の利き特徴へ符号化する。
+///
+/// plane順は次のとおり固定する。
+/// 1. 手番側の駒種別利き14面
+/// 2. 相手側の駒種別利き14面
+/// 3. 手番側の利き数 `>=1`, `>=2`, `>=3`
+/// 4. 相手側の利き数 `>=1`, `>=2`, `>=3`
+///
+/// 各planeのマス順は指し手ラベルと同じ現在手番視点のrank-major形式である。
+/// 利きはYasaiの幾何学的利きをそのまま採用し、長距離駒は最初の占有マスを含む。
+///
+/// `FEATURE_VERSION` は aggregate `FeatureEncoder` 統合時に bump する。
+#[must_use]
+pub fn encode_attack_features(position: &Position) -> AttackFeatures {
+    let position: &yasai::Position = position.as_ref();
+    let side_to_move = position.side_to_move();
+    let attack_map = position.attack_map();
+    let mut features = [[false; BOARD_SQUARES]; ATTACK_FEATURE_PLANES];
+
+    for (side, color) in [
+        (PieceFeatureSide::Own, side_to_move),
+        (PieceFeatureSide::Opponent, side_to_move.flip()),
+    ] {
+        for kind in PieceKind::all() {
+            let plane = attack_feature_plane(side, kind);
+            for square in attack_map.attacks(color, kind).squares() {
+                let current_square = current_view(square, side_to_move);
+                features[plane][plane_square_index(current_square)] = true;
+            }
+        }
+
+        let Some(count_plane_base) = attack_count_feature_plane(side, 1) else {
+            continue;
+        };
+        for square in Square::all() {
+            let count = usize::from(attack_map.attack_count(color, square));
+            if count == 0 {
+                continue;
+            }
+            let index = plane_square_index(current_view(square, side_to_move));
+            let upto = count.min(ATTACK_COUNT_FEATURE_PLANES_PER_SIDE);
+            for threshold in 1..=upto {
+                features[count_plane_base + (threshold - 1)][index] = true;
+            }
+        }
+    }
+
+    features
+}

@@ -507,3 +507,161 @@ fn hand_feature_plane_matches_encoder_iteration_order() {
     }
     assert_eq!(expected, HAND_FEATURE_PLANES_PER_SIDE);
 }
+
+#[test]
+fn attack_feature_contract_has_fixed_plane_order() {
+    assert_eq!(ATTACK_FEATURE_PLANES, 34);
+
+    for (index, kind) in PieceKind::all().into_iter().enumerate() {
+        assert_eq!(attack_feature_plane(PieceFeatureSide::Own, kind), index);
+        assert_eq!(
+            attack_feature_plane(PieceFeatureSide::Opponent, kind),
+            PieceKind::NUM + index
+        );
+    }
+
+    assert_eq!(
+        attack_count_feature_plane(PieceFeatureSide::Own, 1),
+        Some(PieceKind::NUM * 2)
+    );
+    assert_eq!(
+        attack_count_feature_plane(PieceFeatureSide::Own, 2),
+        Some(PieceKind::NUM * 2 + 1)
+    );
+    assert_eq!(
+        attack_count_feature_plane(PieceFeatureSide::Own, 3),
+        Some(PieceKind::NUM * 2 + 2)
+    );
+    assert_eq!(
+        attack_count_feature_plane(PieceFeatureSide::Opponent, 1),
+        Some(PieceKind::NUM * 2 + 3)
+    );
+    assert_eq!(
+        attack_count_feature_plane(PieceFeatureSide::Opponent, 2),
+        Some(PieceKind::NUM * 2 + 4)
+    );
+    assert_eq!(
+        attack_count_feature_plane(PieceFeatureSide::Opponent, 3),
+        Some(PieceKind::NUM * 2 + 5)
+    );
+
+    assert_eq!(attack_count_feature_plane(PieceFeatureSide::Own, 0), None);
+    assert_eq!(attack_count_feature_plane(PieceFeatureSide::Own, 4), None);
+    assert_eq!(
+        attack_count_feature_plane(PieceFeatureSide::Opponent, 0),
+        None
+    );
+    assert_eq!(
+        attack_count_feature_plane(PieceFeatureSide::Opponent, 4),
+        None
+    );
+}
+
+#[test]
+fn attack_feature_piece_kind_planes_cover_stepping_and_promoted_pieces() {
+    let startpos = Position::startpos();
+    let start_features = encode_attack_features(&startpos);
+    let own_pawn = attack_feature_plane(PieceFeatureSide::Own, PieceKind::Pawn);
+    let own_knight = attack_feature_plane(PieceFeatureSide::Own, PieceKind::Knight);
+    let opponent_pawn = attack_feature_plane(PieceFeatureSide::Opponent, PieceKind::Pawn);
+
+    assert!(start_features[own_pawn][5 * 9 + 6]);
+    assert!(start_features[own_knight][6 * 9]);
+    assert!(start_features[own_knight][6 * 9 + 2]);
+    assert!(start_features[opponent_pawn][3 * 9 + 2]);
+
+    let promoted = Position::from_sfen("4+B4/9/9/9/9/9/9/9/9 b - 1")
+        .expect("promoted-bishop fixture is valid");
+    let promoted_features = encode_attack_features(&promoted);
+    let own_pro_bishop = attack_feature_plane(PieceFeatureSide::Own, PieceKind::ProBishop);
+
+    assert!(promoted_features[own_pro_bishop][3]);
+    assert!(promoted_features[own_pro_bishop][5]);
+    assert!(promoted_features[own_pro_bishop][13]);
+}
+
+#[test]
+fn attack_feature_sliding_includes_blocker_not_beyond() {
+    // 先手飛 9八。3八まで利き、遮蔽なし。
+    let open = Position::from_sfen("9/9/9/9/9/9/9/R8/9 b - 1").expect("open-rook fixture is valid");
+    // 先手飛 1八、後手歩 2八で遮蔽。2八は利きに含み、3八は含まない。
+    let blocked =
+        Position::from_sfen("9/9/9/9/9/9/9/7pR/9 b - 1").expect("blocked-rook fixture is valid");
+    let open_features = encode_attack_features(&open);
+    let blocked_features = encode_attack_features(&blocked);
+    let own_rook = attack_feature_plane(PieceFeatureSide::Own, PieceKind::Rook);
+    let blocker_square_index = 7 * 9 + 1;
+    let beyond_square_index = 7 * 9 + 2;
+
+    assert!(open_features[own_rook][beyond_square_index]);
+    assert!(blocked_features[own_rook][blocker_square_index]);
+    assert!(!blocked_features[own_rook][beyond_square_index]);
+}
+
+#[test]
+fn attack_feature_count_threshold_and_clip() {
+    let center = 4 * 9 + 4;
+    let own_ge1 = attack_count_feature_plane(PieceFeatureSide::Own, 1).expect("threshold 1");
+    let own_ge2 = attack_count_feature_plane(PieceFeatureSide::Own, 2).expect("threshold 2");
+    let own_ge3 = attack_count_feature_plane(PieceFeatureSide::Own, 3).expect("threshold 3");
+    let opp_ge1 = attack_count_feature_plane(PieceFeatureSide::Opponent, 1).expect("threshold 1");
+    let opp_ge2 = attack_count_feature_plane(PieceFeatureSide::Opponent, 2).expect("threshold 2");
+    let opp_ge3 = attack_count_feature_plane(PieceFeatureSide::Opponent, 3).expect("threshold 3");
+
+    // 先手飛2枚が 5五へ利く。>=1, >=2 のみ立ち、>=3 は立たない。
+    let two_rooks =
+        Position::from_sfen("9/9/9/9/R7R/9/9/9/9 b - 1").expect("two-rook fixture is valid");
+    let two_features = encode_attack_features(&two_rooks);
+    let own_rook = attack_feature_plane(PieceFeatureSide::Own, PieceKind::Rook);
+
+    assert!(two_features[own_rook][center]);
+    assert!(two_features[own_ge1][center]);
+    assert!(two_features[own_ge2][center]);
+    assert!(!two_features[own_ge3][center]);
+
+    // 先手角4・飛2が 5五へ6手利き。>=3 へ clip され、それ以上でも >=3 面のみ立つ。
+    let four_plus =
+        Position::from_sfen("B3R3B/9/9/9/9/9/9/9/B3R3B b - 1").expect("four-plus fixture is valid");
+    let four_plus_features = encode_attack_features(&four_plus);
+
+    assert!(
+        four_plus
+            .as_ref()
+            .attack_map()
+            .attack_count(Color::Black, square(5, 5))
+            >= 4
+    );
+    assert!(four_plus_features[own_ge1][center]);
+    assert!(four_plus_features[own_ge2][center]);
+    assert!(four_plus_features[own_ge3][center]);
+
+    // 後手角4・飛2が 5五へ6手利き (先手番)。相手側利き数面も同様に clip される。
+    let opponent_four_plus = Position::from_sfen("b3r3b/9/9/9/9/9/9/9/b3r3b b - 1")
+        .expect("opponent-four-plus fixture is valid");
+    let opponent_features = encode_attack_features(&opponent_four_plus);
+
+    assert!(
+        opponent_four_plus
+            .as_ref()
+            .attack_map()
+            .attack_count(Color::White, square(5, 5))
+            >= 4
+    );
+    assert!(opponent_features[opp_ge1][center]);
+    assert!(opponent_features[opp_ge2][center]);
+    assert!(opponent_features[opp_ge3][center]);
+}
+
+#[test]
+fn attack_feature_symmetry() {
+    // 非対称配置: 先手飛 9八のみ / 後手番では盤面反転した後手飛 1二のみ。
+    let black =
+        Position::from_sfen("9/9/9/9/9/9/9/R8/9 b - 1").expect("black-rook fixture is valid");
+    let white =
+        Position::from_sfen("9/8r/9/9/9/9/9/9/9 w - 1").expect("white-rook fixture is valid");
+
+    assert_eq!(
+        encode_attack_features(&black),
+        encode_attack_features(&white)
+    );
+}
