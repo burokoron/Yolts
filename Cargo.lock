@@ -165,7 +165,7 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 [[package]]
 name = "yasai"
 version = "0.5.0"
-source = "git+https://github.com/burokoron/yasai/?rev=b7bde8287d18b343920f4a9dd7e570729dd8d0ca#b7bde8287d18b343920f4a9dd7e570729dd8d0ca"
+source = "git+https://github.com/burokoron/yasai/?rev=377264937d3f7667f067cf32271f2ab08d936245#377264937d3f7667f067cf32271f2ab08d936245"
 dependencies = [
  "arrayvec",
  "cfg-if",

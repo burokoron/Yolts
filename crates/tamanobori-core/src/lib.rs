@@ -1,7 +1,6 @@
 mod feature;
 mod move_label;
 mod position;
-mod rules;
 mod view;
 
 #[cfg(test)]
@@ -16,8 +15,9 @@ pub use move_label::{
     decode_move_label, encode_legal_moves, encode_move_label, make_legal_move_mask,
     move_label_from_parts, move_label_parts, MoveLabelError, MoveLabelParts, MoveLabelPlane,
 };
-pub use position::{Position, RepetitionOutcome, RuleTerminalOutcome};
-pub use rules::{DeclarationRuleConfig, DeclarationWinInfo};
+pub use position::{
+    DeclarationRule, NyugyokuStats, Position, RepetitionOutcome, RuleTerminalOutcome,
+};
 pub use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 
 pub const FORMAL_NAME_JA: &str = "爆裂玉登太郎";

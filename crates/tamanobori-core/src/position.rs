@@ -1,13 +1,7 @@
 use shogi_core::{Color, Move, PartialPosition, Square};
 use shogi_usi_parser::FromUsi;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RepetitionOutcome {
-    None,
-    Draw,
-    Win,
-    Loss,
-}
+pub use yasai::{DeclarationRule, NyugyokuStats, RepetitionOutcome};
 
 /// 現在手番側から見たルール由来の終局結果。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -19,25 +13,9 @@ pub enum RuleTerminalOutcome {
     MaxPlyDraw,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Transition {
-    Initial,
-    Move(Move),
-    NullMove,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct HistoryEntry {
-    keys: (u64, u64),
-    side_to_move: Color,
-    in_check: bool,
-    transition: Transition,
-}
-
 #[derive(Clone, Debug)]
 pub struct Position {
     inner: yasai::Position,
-    history: Vec<HistoryEntry>,
 }
 
 impl AsRef<yasai::Position> for Position {
@@ -46,9 +24,35 @@ impl AsRef<yasai::Position> for Position {
     }
 }
 
+/// 合法手の有無、千日手、最大手数から終局結果を合成する。
+///
+/// 合法手なし、千日手・連続王手、最大手数の順に判定し、先に成立した結果を優先する。
+/// `Superior` / `Inferior` は探索省略用の関係であり、終局にはしない。
+#[must_use]
+pub(crate) fn rule_terminal_outcome_from_state(
+    has_legal_moves: bool,
+    repetition: RepetitionOutcome,
+    max_ply: Option<u16>,
+    current_ply: u16,
+) -> Option<RuleTerminalOutcome> {
+    if !has_legal_moves {
+        return Some(RuleTerminalOutcome::NoLegalMovesLoss);
+    }
+
+    match repetition {
+        RepetitionOutcome::None | RepetitionOutcome::Superior | RepetitionOutcome::Inferior => {}
+        RepetitionOutcome::Draw => return Some(RuleTerminalOutcome::RepetitionDraw),
+        RepetitionOutcome::Win => return Some(RuleTerminalOutcome::PerpetualCheckWin),
+        RepetitionOutcome::Loss => return Some(RuleTerminalOutcome::PerpetualCheckLoss),
+    }
+
+    max_ply
+        .is_some_and(|limit| current_ply >= limit)
+        .then_some(RuleTerminalOutcome::MaxPlyDraw)
+}
+
 impl Position {
     /// 平手初期局面を構築する。
-    ///
     #[must_use]
     pub fn startpos() -> Self {
         Self::from_partial(PartialPosition::startpos())
@@ -69,13 +73,9 @@ impl Position {
     }
 
     fn from_partial(partial: PartialPosition) -> Self {
-        let inner = yasai::Position::new(partial);
-        let mut position = Self {
-            inner,
-            history: Vec::new(),
-        };
-        position.push_history(Transition::Initial);
-        position
+        Self {
+            inner: yasai::Position::new(partial),
+        }
     }
 
     #[must_use]
@@ -90,22 +90,14 @@ impl Position {
     /// `value`が現在局面の合法手でない場合にpanicする可能性がある。
     pub fn do_move(&mut self, value: Move) {
         self.inner.do_move(value);
-        self.push_history(Transition::Move(value));
     }
 
     /// 直前の着手を戻す。
     ///
-    /// # Panics
-    ///
-    /// `value`が直前に進めた着手と一致しない場合にpanicする。
+    /// `value`は直前に進めた着手と一致していなければならない。
+    /// この事前条件を満たすことは呼び出し側の責務である。
     pub fn undo_move(&mut self, value: Move) {
-        assert_eq!(
-            self.history.last().map(|entry| entry.transition),
-            Some(Transition::Move(value)),
-            "undo_move must match the latest move"
-        );
         self.inner.undo_move(value);
-        self.history.pop();
     }
 
     /// 王手されていない局面でnull moveを進める。
@@ -120,65 +112,18 @@ impl Position {
             "null move must not be played while in check"
         );
         self.inner.do_null_move();
-        self.push_history(Transition::NullMove);
     }
 
     /// 直前のnull moveを戻す。
     ///
-    /// # Panics
-    ///
-    /// 直前の操作がnull moveでない場合にpanicする。
+    /// 直前の操作がnull moveであることは呼び出し側の責務である。
     pub fn undo_null_move(&mut self) {
-        assert_eq!(
-            self.history.last().map(|entry| entry.transition),
-            Some(Transition::NullMove),
-            "undo_null_move must match the latest move"
-        );
         self.inner.undo_null_move();
-        self.history.pop();
     }
 
     #[must_use]
     pub fn repetition_outcome(&self) -> RepetitionOutcome {
-        let start = self
-            .history
-            .iter()
-            .rposition(|entry| entry.transition == Transition::NullMove)
-            .map_or(0, |index| index + 1);
-        let current_keys = self.inner.keys();
-        let repetitions = self.history[start..]
-            .iter()
-            .enumerate()
-            .rev()
-            .filter(|(_, entry)| entry.keys == current_keys)
-            .map(|(index, _)| start + index)
-            .take(4)
-            .collect::<Vec<_>>();
-        if repetitions.len() < 4 {
-            return RepetitionOutcome::None;
-        }
-
-        let oldest = repetitions[3];
-        for checker in Color::all() {
-            let mut moved = false;
-            let continuous = self.history[oldest + 1..].iter().all(|entry| {
-                if !matches!(entry.transition, Transition::Move(_))
-                    || entry.side_to_move.flip() != checker
-                {
-                    return true;
-                }
-                moved = true;
-                entry.in_check
-            });
-            if moved && continuous {
-                return if self.inner.side_to_move() == checker {
-                    RepetitionOutcome::Loss
-                } else {
-                    RepetitionOutcome::Win
-                };
-            }
-        }
-        RepetitionOutcome::Draw
+        self.inner.repetition_outcome()
     }
 
     /// 合法手、千日手、最大手数から現在局面の終局結果を返す。
@@ -188,49 +133,27 @@ impl Position {
     /// 宣言勝ちは通常着手とは別のrule actionとして扱うため、この判定には含めない。
     #[must_use]
     pub fn rule_terminal_outcome(&self, max_ply: Option<u16>) -> Option<RuleTerminalOutcome> {
-        if self.inner.legal_moves().is_empty() {
-            return Some(RuleTerminalOutcome::NoLegalMovesLoss);
-        }
-
-        match self.repetition_outcome() {
-            RepetitionOutcome::None => {}
-            RepetitionOutcome::Draw => return Some(RuleTerminalOutcome::RepetitionDraw),
-            RepetitionOutcome::Win => return Some(RuleTerminalOutcome::PerpetualCheckWin),
-            RepetitionOutcome::Loss => return Some(RuleTerminalOutcome::PerpetualCheckLoss),
-        }
-
-        max_ply
-            .is_some_and(|limit| self.inner.ply() >= limit)
-            .then_some(RuleTerminalOutcome::MaxPlyDraw)
+        rule_terminal_outcome_from_state(
+            !self.inner.legal_moves().is_empty(),
+            self.repetition_outcome(),
+            max_ply,
+            self.inner.ply(),
+        )
     }
 
-    /// 現在手番側が王手され、合法な応手がないかを返す。
-    /// 王手されていないが合法手がないステイルメイトは含めない。
     #[must_use]
-    pub fn is_mated(&self) -> bool {
-        self.inner.in_check() && self.inner.legal_moves().is_empty()
+    pub fn can_declare_win(&self, rule: DeclarationRule) -> bool {
+        self.inner.can_declare_win(rule)
     }
 
-    pub fn mate_in_one_moves(&mut self) -> Vec<Move> {
-        let moves = self.inner.legal_moves();
-        let mut mates = Vec::new();
-        for value in moves {
-            self.do_move(value);
-            if self.is_mated() {
-                mates.push(value);
-            }
-            self.undo_move(value);
-        }
-        mates
+    #[must_use]
+    pub fn nyugyoku_stats(&self, rule: DeclarationRule, side: Color) -> NyugyokuStats {
+        self.inner.nyugyoku_stats(rule, side)
     }
 
-    fn push_history(&mut self, transition: Transition) {
-        self.history.push(HistoryEntry {
-            keys: self.inner.keys(),
-            side_to_move: self.inner.side_to_move(),
-            in_check: self.inner.in_check(),
-            transition,
-        });
+    #[must_use]
+    pub fn mate_in_one(&self) -> Option<Move> {
+        self.inner.mate_in_one()
     }
 
     fn to_partial_position(&self) -> PartialPosition {
