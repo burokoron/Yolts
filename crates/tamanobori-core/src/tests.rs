@@ -665,3 +665,47 @@ fn attack_feature_symmetry() {
         encode_attack_features(&white)
     );
 }
+
+#[test]
+fn check_feature_contract_has_single_broadcast_plane() {
+    assert_eq!(CHECK_FEATURE_PLANES, 1);
+}
+
+#[test]
+fn check_feature_startpos_is_all_false() {
+    let startpos = Position::startpos();
+    let features = encode_check_features(&startpos);
+
+    assert!(!startpos.as_ref().in_check());
+    assert!(features[0].iter().all(|&val| !val));
+}
+
+#[test]
+fn check_feature_current_side_in_check_broadcasts_true() {
+    // 先手番: 後手飛が5筋で先手玉へ縦利き。
+    let black_in_check = Position::from_sfen("9/9/9/9/4K4/9/9/9/4r4 b - 1")
+        .expect("black-in-check fixture is valid");
+    let black_features = encode_check_features(&black_in_check);
+
+    assert!(black_in_check.as_ref().in_check());
+    assert!(black_features[0].iter().all(|&val| val));
+
+    // 後手番: 先手飛が5筋で後手玉へ縦利き。
+    let white_in_check = Position::from_sfen("4k4/9/9/9/9/9/9/9/4R4 w - 1")
+        .expect("white-in-check fixture is valid");
+    let white_features = encode_check_features(&white_in_check);
+
+    assert!(white_in_check.as_ref().in_check());
+    assert!(white_features[0].iter().all(|&val| val));
+}
+
+#[test]
+fn check_feature_ignores_opponent_check() {
+    // 先手番だが王手されているのは後手玉のみ。
+    let opponent_only = Position::from_sfen("4k4/9/9/9/9/9/9/9/4R4 b - 1")
+        .expect("opponent-only-check fixture is valid");
+    let features = encode_check_features(&opponent_only);
+
+    assert!(!opponent_only.as_ref().in_check());
+    assert!(features[0].iter().all(|&val| !val));
+}

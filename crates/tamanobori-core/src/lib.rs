@@ -7,9 +7,10 @@ mod view;
 mod tests;
 
 pub use feature::{
-    attack_count_feature_plane, attack_feature_plane, encode_attack_features, encode_hand_features,
-    encode_piece_placement_features, hand_feature_plane, piece_feature_plane, AttackFeatures,
-    HandFeatures, PieceFeatureSide, PiecePlacementFeatures, ATTACK_FEATURE_PLANES,
+    attack_count_feature_plane, attack_feature_plane, encode_attack_features,
+    encode_check_features, encode_hand_features, encode_piece_placement_features,
+    hand_feature_plane, piece_feature_plane, AttackFeatures, CheckFeatures, HandFeatures,
+    PieceFeatureSide, PiecePlacementFeatures, ATTACK_FEATURE_PLANES, CHECK_FEATURE_PLANES,
     HAND_FEATURE_PLANES, HAND_FEATURE_PLANES_PER_SIDE, PIECE_FEATURE_PLANES,
 };
 pub use move_label::{

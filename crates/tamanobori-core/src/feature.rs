@@ -242,3 +242,25 @@ pub fn encode_attack_features(position: &Position) -> AttackFeatures {
 
     features
 }
+
+/// 現在手番の王手状態を表す plane の枚数（broadcast）。
+pub const CHECK_FEATURE_PLANES: usize = 1;
+
+/// plane-major形式の王手状態特徴。
+pub type CheckFeatures = [[bool; BOARD_SQUARES]; CHECK_FEATURE_PLANES];
+
+/// 局面を現在手番視点の王手状態特徴へ符号化する。
+///
+/// 現在手番側が王手中なら唯一のplaneの81マスすべてを `true` にし、
+/// 非王手ならすべて `false` にする。判定はYasaiの `in_check()` をそのまま使う。
+///
+/// `FEATURE_VERSION` は aggregate `FeatureEncoder` 統合時に bump する。
+#[must_use]
+pub fn encode_check_features(position: &Position) -> CheckFeatures {
+    let position: &yasai::Position = position.as_ref();
+    let mut features = [[false; BOARD_SQUARES]; CHECK_FEATURE_PLANES];
+    if position.in_check() {
+        features[0].fill(true);
+    }
+    features
+}
